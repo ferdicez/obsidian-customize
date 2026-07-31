@@ -44,6 +44,11 @@ export interface EstiloCallout {
 	radius?: number;
 	alinhamentoTitulo?: AlinhamentoTitulo;
 	mostrarIcone?: boolean;
+	/**
+	 * Tamanho do ícone em px. O Obsidian dimensiona o SVG do callout por `--icon-size`
+	 * (herdada do contexto, tipicamente 18px). Ver `regrasDoCallout`.
+	 */
+	tamanhoIcone?: number;
 	/** Negrito do título (peso da fonte). */
 	pesoTitulo?: number;
 	/** Desliga o mix-blend-mode, que distorce cores de fundo customizadas. */
@@ -168,6 +173,23 @@ function regrasDoTitulo(estilo: EstiloCallout): string[] {
 	return [`justify-content: ${JUSTIFY[estilo.alinhamentoTitulo]};`];
 }
 
+/**
+ * Regras do ícone (`.callout-icon`). O Obsidian dimensiona ícones por `--icon-size`, mas o
+ * `<svg>` gerado pelo `setIcon` também traz `width`/`height` como ATRIBUTOS — que perdem para
+ * qualquer regra CSS, mas só se existir uma. Por isso mandamos os dois: a variável (que é o
+ * caminho oficial e cobre temas que a consomem) e width/height explícitos no svg.
+ */
+function regrasDoIcone(estilo: EstiloCallout): string[] {
+	if (estilo.tamanhoIcone === undefined) return [];
+	return [`--icon-size: ${estilo.tamanhoIcone}px;`];
+}
+
+/** Regras aplicadas ao `<svg>` dentro do ícone — ver `regrasDoIcone`. */
+function regrasDoSvg(estilo: EstiloCallout): string[] {
+	if (estilo.tamanhoIcone === undefined) return [];
+	return [`width: ${estilo.tamanhoIcone}px;`, `height: ${estilo.tamanhoIcone}px;`];
+}
+
 function bloco(seletor: string, regras: string[]): string {
 	if (regras.length === 0) return "";
 	return `${seletor} {\n\t${regras.join("\n\t")}\n}`;
@@ -194,6 +216,9 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 
 	if (dados.global.mostrarIcone === false) {
 		partes.push(bloco(".callout > .callout-title > .callout-icon", ["display: none;"]));
+	} else {
+		partes.push(bloco(".callout > .callout-title > .callout-icon", regrasDoIcone(dados.global)));
+		partes.push(bloco(".callout > .callout-title > .callout-icon > svg", regrasDoSvg(dados.global)));
 	}
 
 	// ── Coringa ("Padrão"): qualquer nome que o Obsidian não conhece ──────────────────────
@@ -205,8 +230,9 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 	if (dados.coringa.icone) coringaRegras.push(`--callout-icon: ${dados.coringa.icone};`);
 
 	const coringaTitulo = regrasDoTitulo(dados.coringa.estilo);
+	const coringaIcone = regrasDoIcone(dados.coringa.estilo);
 
-	if (coringaRegras.length > 0 || coringaTitulo.length > 0) {
+	if (coringaRegras.length > 0 || coringaTitulo.length > 0 || coringaIcone.length > 0) {
 		// Exclui os nativos E os tipos já personalizados — estes têm regra própria e não
 		// devem ser sobrepostos pelo coringa.
 		const excluir = [...NOMES_NATIVOS, ...dados.personalizados.map((p) => p.tipo.trim().toLowerCase())]
@@ -220,6 +246,11 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 
 		if (dados.coringa.estilo.mostrarIcone === false) {
 			partes.push(bloco(`${selCoringa} > .callout-title > .callout-icon`, ["display: none;"]));
+		} else {
+			partes.push(bloco(`${selCoringa} > .callout-title > .callout-icon`, coringaIcone));
+			partes.push(
+				bloco(`${selCoringa} > .callout-title > .callout-icon > svg`, regrasDoSvg(dados.coringa.estilo)),
+			);
 		}
 	}
 
@@ -240,8 +271,13 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 		// Só emite se o tipo decidir algo diferente do global (undefined = herda).
 		if (p.estilo.mostrarIcone === false) {
 			partes.push(bloco(`${sel} > .callout-title > .callout-icon`, ["display: none;"]));
-		} else if (p.estilo.mostrarIcone === true && dados.global.mostrarIcone === false) {
-			partes.push(bloco(`${sel} > .callout-title > .callout-icon`, ["display: flex;"]));
+		} else {
+			const regrasIcone = regrasDoIcone(p.estilo);
+			if (p.estilo.mostrarIcone === true && dados.global.mostrarIcone === false) {
+				regrasIcone.unshift("display: flex;");
+			}
+			partes.push(bloco(`${sel} > .callout-title > .callout-icon`, regrasIcone));
+			partes.push(bloco(`${sel} > .callout-title > .callout-icon > svg`, regrasDoSvg(p.estilo)));
 		}
 	}
 
@@ -280,6 +316,9 @@ export function gerarCssPrevia(
 
 	if (estiloResolvido.mostrarIcone === false) {
 		partes.push(bloco(`${base} > .callout-title > .callout-icon`, ["display: none;"]));
+	} else {
+		partes.push(bloco(`${base} > .callout-title > .callout-icon`, regrasDoIcone(estiloResolvido)));
+		partes.push(bloco(`${base} > .callout-title > .callout-icon > svg`, regrasDoSvg(estiloResolvido)));
 	}
 
 	return partes.filter((p) => p.length > 0).join("\n\n");

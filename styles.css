@@ -236,6 +236,80 @@ forma global: ao desativar o plugin, nada deve sobrar visualmente.
 	margin: 0;
 }
 
+/* ── Escolha de ícone ──────────────────────────────────────────────────────────────────── */
+
+.customize-icon-picker-topo {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2, 8px);
+	margin-bottom: var(--size-4-2, 8px);
+}
+
+.customize-icon-picker-busca {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.customize-icon-picker-preview {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: var(--icon-l, 20px);
+	height: var(--icon-l, 20px);
+	color: var(--text-normal);
+}
+
+.customize-icon-picker-grade {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+	gap: var(--size-4-1, 4px);
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.customize-icon-picker-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 1 / 1;
+	border-radius: var(--radius-s, 4px);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.customize-icon-picker-cell:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.customize-icon-picker-cell.is-atual {
+	box-shadow: inset 0 0 0 2px var(--interactive-accent);
+	color: var(--text-normal);
+}
+
+/* Ícone atual mostrado ao lado do botão "Escolher", no painel. */
+.customize-icone-amostra {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--icon-l, 20px);
+	height: var(--icon-l, 20px);
+	color: var(--text-normal);
+}
+
+/* Sem ícone definido: o lápis aparece esmaecido, sinalizando "é só o padrão". */
+.customize-icone-amostra.is-padrao {
+	color: var(--text-faint);
+}
+
+.customize-icone-nome {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-right: var(--size-4-2, 8px);
+}
+
 .customize-explicacao {
 	margin: 0 0 14px 0;
 	padding: 12px;

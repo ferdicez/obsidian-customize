@@ -1,4 +1,4 @@
-﻿import { Notice, Setting } from "obsidian";
+﻿import { Notice, Setting, setIcon } from "obsidian";
 import {
 	resolverEstilo,
 	TIPOS_EMBUTIDOS,
@@ -10,6 +10,7 @@ import { normalizarHex } from "./cores";
 import { importarDoCalloutManager, temCalloutManager } from "./importar-callout-manager";
 import { CLASSE_IGNORAR } from "./interceptador-de-cor";
 import type CustomizePlugin from "./main";
+import { ModalEscolherIcone } from "./modal-escolher-icone";
 import { PreviaCallout } from "./previa-callout";
 
 /**
@@ -20,6 +21,9 @@ import { PreviaCallout } from "./previa-callout";
  * ajustes próprios. Nos controles por tipo, "Padrão" significa herdar do global — por isso
  * os campos são opcionais (`undefined`) em vez de terem um valor default.
  */
+
+/** Limites do slider de tamanho de ícone. 18px é o que o Obsidian usa nos callouts. */
+const TAMANHO_ICONE = { min: 10, max: 48, padrao: 18 };
 
 const ALINHAMENTOS: Array<{ valor: AlinhamentoTitulo; rotulo: string }> = [
 	{ valor: "esquerda", rotulo: "Esquerda" },
@@ -196,18 +200,23 @@ export class SecaoCallouts {
 				}),
 		);
 
-		new Setting(bloco)
-			.setName("Ícone")
-			.setDesc("Nome de um ícone Lucide. Vazio = o lápis padrão do Obsidian.")
-			.addText((t) =>
-				t
-					.setPlaceholder("lucide-star")
-					.setValue(c.icone ?? "")
-					.onChange(async (v) => {
-						c.icone = v.trim() || undefined;
-						await this.salvar();
-					}),
-			);
+		this.controleIcone(
+			bloco,
+			"Estilo Padrão",
+			"Vale para qualquer nome inventado sem estilo próprio.",
+			() => c.icone,
+			(v) => {
+				c.icone = v;
+			},
+		);
+
+		this.controleTamanhoIcone(
+			bloco,
+			c.estilo,
+			"Vazio = usa o tamanho do estilo global.",
+			true,
+			() => this.salvar(),
+		);
 	}
 
 	// ── Estilo global ──────────────────────────────────────────────────────────────────────
@@ -273,8 +282,20 @@ export class SecaoCallouts {
 				t.setValue(g.mostrarIcone !== false).onChange(async (v) => {
 					g.mostrarIcone = v;
 					await salvar();
+					this.redesenhar();
 				}),
 			);
+
+		// Só faz sentido enquanto o ícone estiver visível.
+		if (g.mostrarIcone !== false) {
+			this.controleTamanhoIcone(
+				containerEl,
+				g,
+				`Vale para todos os callouts. O padrão do Obsidian é ${TAMANHO_ICONE.padrao}px.`,
+				false,
+				salvar,
+			);
+		}
 
 		new Setting(containerEl)
 			.setName("Título em negrito")
@@ -430,21 +451,17 @@ export class SecaoCallouts {
 				}),
 		);
 
-		new Setting(editor)
-			.setName("Ícone")
-			.setDesc(
-				"Nome de um ícone Lucide, ex.: lucide-calendar-check. Deixe vazio para o padrão. " +
-					"Trocar o ícone só aparece ao reabrir a nota.",
-			)
-			.addText((t) =>
-				t
-					.setPlaceholder("lucide-star")
-					.setValue(p.icone ?? "")
-					.onChange(async (v) => {
-						p.icone = v.trim() || undefined;
-						await salvar();
-					}),
-			);
+		this.controleIcone(
+			editor,
+			p.tipo,
+			"Trocar o ícone só aparece ao reabrir a nota.",
+			() => p.icone,
+			(v) => {
+				p.icone = v;
+			},
+		);
+
+		this.controleTamanhoIcone(editor, p.estilo, "Vazio = usa o tamanho global.", true, salvar);
 
 		editor.createEl("p", {
 			cls: "setting-item-description",
@@ -540,6 +557,93 @@ export class SecaoCallouts {
 	}
 
 	// ── Controles reutilizáveis ────────────────────────────────────────────────────────────
+
+	/**
+	 * Escolha de ícone por modal visual (`ModalEscolherIcone`), com o ícone atual à mostra.
+	 *
+	 * `ler`/`gravar` em vez de receber o objeto e o nome do campo: os dois donos de ícone
+	 * (`coringa` e cada `CalloutPersonalizado`) têm o campo no mesmo lugar, mas passar
+	 * closures deixa o controle indiferente à forma do dado.
+	 */
+	private controleIcone(
+		containerEl: HTMLElement,
+		contexto: string,
+		desc: string,
+		ler: () => string | undefined,
+		gravar: (v: string | undefined) => void,
+	): void {
+		const setting = new Setting(containerEl).setName("Ícone").setDesc(desc);
+
+		const amostra = setting.controlEl.createDiv({ cls: "customize-icone-amostra" });
+		const rotulo = setting.controlEl.createSpan({ cls: "customize-icone-nome" });
+
+		const refletir = (): void => {
+			const atual = ler();
+			amostra.empty();
+			// `lucide-pencil` é o que o Obsidian usa quando o tipo não define ícone.
+			setIcon(amostra, atual || "lucide-pencil");
+			amostra.toggleClass("is-padrao", !atual);
+			rotulo.setText(atual ?? "padrão do Obsidian");
+		};
+		refletir();
+
+		setting.addButton((b) =>
+			b.setButtonText("Escolher").onClick(() => {
+				new ModalEscolherIcone(this.plugin.app, contexto, ler(), async (escolhido) => {
+					gravar(escolhido);
+					refletir();
+					await this.salvar();
+				}).open();
+			}),
+		);
+
+		setting.addExtraButton((b) =>
+			b
+				.setIcon("rotate-ccw")
+				.setTooltip("Voltar ao ícone padrão")
+				.onClick(async () => {
+					gravar(undefined);
+					refletir();
+					await this.salvar();
+				}),
+		);
+	}
+
+	/**
+	 * Tamanho do ícone. O `undefined` continua significando "herda" — no global ele cai no
+	 * padrão do Obsidian (18px), nos estilos específicos no que o global definiu.
+	 */
+	private controleTamanhoIcone(
+		containerEl: HTMLElement,
+		alvo: EstiloCallout,
+		desc: string,
+		opcional: boolean,
+		salvar: () => Promise<void>,
+	): void {
+		const setting = new Setting(containerEl).setName("Tamanho do ícone").setDesc(desc);
+
+		setting.addSlider((s) =>
+			s
+				.setLimits(TAMANHO_ICONE.min, TAMANHO_ICONE.max, 1)
+				.setValue(alvo.tamanhoIcone ?? TAMANHO_ICONE.padrao)
+				.setDynamicTooltip()
+				.onChange(async (v) => {
+					alvo.tamanhoIcone = v;
+					await salvar();
+				}),
+		);
+
+		setting.addExtraButton((b) =>
+			b
+				.setIcon("rotate-ccw")
+				.setTooltip(opcional ? "Usar o tamanho global" : "Voltar ao tamanho padrão")
+				.onClick(async () => {
+					alvo.tamanhoIcone = undefined;
+					await salvar();
+					this.redesenhar();
+				}),
+		);
+	}
 
 	/** Slider com valor sempre definido (usado no global), com botão de voltar ao padrão. */
 	private controleNumero(
