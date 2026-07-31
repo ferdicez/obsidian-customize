@@ -1,0 +1,249 @@
+﻿/*
+Customize — plugin Obsidian.
+
+Todas as regras são prefixadas com `.customize-` e nenhuma toca em `input[type="color"]` de
+forma global: ao desativar o plugin, nada deve sobrar visualmente.
+*/
+
+/* ── Popover de paleta ─────────────────────────────────────────────────────────────────── */
+
+.customize-popover {
+	position: fixed;
+	/* Acima do modal de settings, que é onde a maioria dos seletores de cor vive. */
+	z-index: var(--layer-menu, 65);
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-s);
+	padding: 8px;
+}
+
+/* Aberto pelo atalho, no meio da tela: merece mais respiro e uma sombra mais presente
+   do que o menuzinho ancorado num seletor. */
+.customize-popover.is-modo-copiar {
+	padding: 12px;
+	box-shadow: var(--shadow-l);
+	max-width: min(560px, calc(100vw - 32px));
+	max-height: calc(100vh - 32px);
+	overflow-y: auto;
+}
+
+.customize-popover-titulo {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+	padding: 0 2px 8px 2px;
+}
+
+.customize-popover-grade {
+	display: grid;
+	gap: 6px;
+}
+
+.customize-swatch:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+/* ── Modo escolher: grade compacta, só as cores ────────────────────────────────────────── */
+
+/* Precisa bater com COLUNAS.escolher em popover-paleta.ts (navegação por ↑/↓). */
+.customize-popover.is-modo-escolher .customize-popover-grade {
+	grid-template-columns: repeat(8, 1fr);
+}
+
+.customize-popover.is-modo-escolher .customize-swatch {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border-radius: 4px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--customize-cor);
+	cursor: pointer;
+	box-shadow: none;
+}
+
+/* Cores muito claras somem contra o fundo claro: borda mais marcada para continuarem visíveis. */
+.customize-popover.is-modo-escolher .customize-swatch.is-clara {
+	border-color: var(--background-modifier-border-hover);
+}
+
+.customize-popover.is-modo-escolher .customize-swatch:hover {
+	transform: scale(1.12);
+}
+
+.customize-popover.is-modo-escolher .customize-swatch.is-atual {
+	box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+/* ── Modo copiar: cor + código hex à mostra ────────────────────────────────────────────── */
+
+/* Precisa bater com COLUNAS.copiar em popover-paleta.ts. */
+.customize-popover.is-modo-copiar .customize-popover-grade {
+	grid-template-columns: repeat(4, 1fr);
+}
+
+.customize-popover.is-modo-copiar .customize-swatch {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 5px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	cursor: pointer;
+	box-shadow: none;
+	text-align: left;
+}
+
+.customize-popover.is-modo-copiar .customize-swatch:hover {
+	background: var(--background-modifier-hover);
+}
+
+.customize-swatch-amostra {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+	border-radius: 4px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--customize-cor);
+}
+
+.customize-swatch.is-clara .customize-swatch-amostra {
+	border-color: var(--background-modifier-border-hover);
+}
+
+.customize-swatch-hex {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	line-height: 1;
+}
+
+/* Confirmação de que a cor foi copiada — o popover continua aberto, então o feedback
+   precisa ficar visível no próprio swatch. */
+.customize-popover.is-modo-copiar .customize-swatch.is-copiado {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+.customize-popover.is-modo-copiar .customize-swatch.is-copiado .customize-swatch-hex {
+	color: var(--interactive-accent);
+}
+
+.customize-popover-rodape {
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.customize-btn-personalizada {
+	width: 100%;
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+/* ── Painel de configurações ───────────────────────────────────────────────────────────── */
+
+.customize-config-preview {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+	margin-top: 6px;
+}
+
+.customize-config-mini {
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--customize-cor);
+}
+
+.customize-editor-cores {
+	margin: 0 0 18px 0;
+	padding: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+}
+
+.customize-linha-cor {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 0;
+}
+
+.customize-linha-cor .customize-config-mini {
+	width: 20px;
+	height: 20px;
+	flex: 0 0 auto;
+}
+
+.customize-linha-cor-hex {
+	flex: 1 1 auto;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.customize-adicionar-cor {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.customize-adicionar-cor input[type="color"] {
+	flex: 0 0 auto;
+	width: 32px;
+	height: 28px;
+	padding: 2px;
+}
+
+.customize-adicionar-cor input[type="text"] {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-family: var(--font-monospace);
+}
+
+.customize-input-numero {
+	width: 7em;
+}
+
+.customize-explicacao {
+	margin: 0 0 14px 0;
+	padding: 12px;
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.customize-explicacao p {
+	margin: 0 0 8px 0;
+}
+
+.customize-explicacao p:last-child {
+	margin-bottom: 0;
+}
+
+.customize-explicacao code {
+	display: inline-block;
+	margin-bottom: 8px;
+	padding: 4px 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: var(--font-monospace);
+}
+
+.customize-vazio {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	padding: 4px 0;
+}
