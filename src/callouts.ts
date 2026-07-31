@@ -247,3 +247,54 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 
 	return partes.filter((p) => p.length > 0).join("\n\n");
 }
+
+/**
+ * CSS de UMA prévia do painel de configurações, escopado por id.
+ *
+ * Escopado de propósito: as regras da prévia não podem vazar para as notas. Por isso o
+ * seletor é `#<id> .callout`, e não `.callout` — e por isso esta função é separada do
+ * `gerarCssCallouts`, em vez de um parâmetro nele: são dois destinos com regras diferentes
+ * (a prévia mostra UM estilo resolvido; o CSS real precisa da lógica de coringa, tipos e
+ * exclusões).
+ *
+ * `estiloResolvido` já vem com a herança aplicada pelo chamador — a prévia mostra o
+ * resultado final, não a cascata.
+ */
+export function gerarCssPrevia(
+	idPrevia: string,
+	estiloResolvido: EstiloCallout,
+	cor?: string,
+	icone?: string,
+): string {
+	const base = `#${idPrevia} .callout`;
+	const partes: string[] = [];
+
+	const regras = regrasDoCallout(estiloResolvido, cor);
+	if (icone) regras.push(`--callout-icon: ${icone};`);
+	// A prévia vive dentro do modal de settings, onde o mix-blend-mode dá resultado
+	// diferente do fundo de uma nota. Fixamos normal para o que ela vê ser o que sai.
+	if (!estiloResolvido.corSolida) regras.push("--callout-blend-mode: normal;");
+	partes.push(bloco(base, regras));
+
+	partes.push(bloco(`${base} > .callout-title`, regrasDoTitulo(estiloResolvido)));
+
+	if (estiloResolvido.mostrarIcone === false) {
+		partes.push(bloco(`${base} > .callout-title > .callout-icon`, ["display: none;"]));
+	}
+
+	return partes.filter((p) => p.length > 0).join("\n\n");
+}
+
+/** Aplica a herança: o que o estilo específico não define, vem do global. */
+export function resolverEstilo(global: EstiloCallout, especifico: EstiloCallout): EstiloCallout {
+	return { ...global, ...limparIndefinidos(especifico) };
+}
+
+/** Remove chaves com valor `undefined` para o spread não apagar o que veio do global. */
+function limparIndefinidos(e: EstiloCallout): EstiloCallout {
+	const saida: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(e)) {
+		if (v !== undefined) saida[k] = v;
+	}
+	return saida as EstiloCallout;
+}

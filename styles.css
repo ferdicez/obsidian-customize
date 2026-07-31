@@ -214,6 +214,28 @@ forma global: ao desativar o plugin, nada deve sobrar visualmente.
 	width: 7em;
 }
 
+/* ── Prévia de callout no painel ───────────────────────────────────────────────────────── */
+
+.customize-previa {
+	margin: 8px 0 16px 0;
+	padding: 14px;
+	border-radius: var(--radius-m);
+	/* Fundo da nota, não do painel: o callout precisa ser visto sobre o que ele terá
+	   de fundo de verdade, senão a percepção de contraste engana. */
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+}
+
+/* O .callout dentro da prévia herda as regras nativas do Obsidian; só neutralizamos a
+   margem vertical, que existe para o fluxo de uma nota e aqui sobraria. */
+.customize-previa .callout {
+	margin: 0;
+}
+
+.customize-previa .callout-content p {
+	margin: 0;
+}
+
 .customize-explicacao {
 	margin: 0 0 14px 0;
 	padding: 12px;

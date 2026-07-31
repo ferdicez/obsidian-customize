@@ -1,5 +1,6 @@
 ﻿import { Notice, Setting } from "obsidian";
 import {
+	resolverEstilo,
 	TIPOS_EMBUTIDOS,
 	type AlinhamentoTitulo,
 	type CalloutPersonalizado,
@@ -9,6 +10,7 @@ import { normalizarHex } from "./cores";
 import { importarDoCalloutManager, temCalloutManager } from "./importar-callout-manager";
 import { CLASSE_IGNORAR } from "./interceptador-de-cor";
 import type CustomizePlugin from "./main";
+import { PreviaCallout } from "./previa-callout";
 
 /**
  * A seção "Callouts" do painel de configurações. Fica em módulo próprio porque tem bastante
@@ -38,6 +40,13 @@ interface OpcoesNumero {
 }
 
 export class SecaoCallouts {
+	/**
+	 * Prévias vivas no painel. Repovoada a cada `render()`; `atualizarPrevias()` redesenha
+	 * todas sem reconstruir o painel — é o que permite ver o efeito enquanto o slider anda,
+	 * já que um `display()` completo faria o controle perder o foco no meio do arraste.
+	 */
+	private previas: Array<() => void> = [];
+
 	/** Tipo com o editor aberto (null = nenhum). Estado só de UI, não persiste. */
 	private editando: string | null = null;
 	/**
@@ -58,6 +67,30 @@ export class SecaoCallouts {
 		this.calloutManagerPresente = await temCalloutManager(this.plugin.app);
 	}
 
+	/** Salva e redesenha as prévias — o que todo controle desta seção deve chamar. */
+	private async salvar(): Promise<void> {
+		await this.plugin.salvar();
+		this.atualizarPrevias();
+	}
+
+	private atualizarPrevias(): void {
+		for (const atualizar of this.previas) atualizar();
+	}
+
+	/** Cria uma prévia e registra sua função de atualização. */
+	private criarPrevia(
+		pai: HTMLElement,
+		estado: () => { estilo: EstiloCallout; cor?: string; icone?: string },
+	): void {
+		const previa = new PreviaCallout(pai);
+		const atualizar = (): void => {
+			const { estilo, cor, icone } = estado();
+			previa.atualizar(estilo, cor, icone);
+		};
+		atualizar();
+		this.previas.push(atualizar);
+	}
+
 	render(containerEl: HTMLElement): void {
 		new Setting(containerEl).setHeading().setName("Callouts");
 
@@ -74,12 +107,16 @@ export class SecaoCallouts {
 			.addToggle((t) =>
 				t.setValue(this.dados.ativo).onChange(async (v) => {
 					this.dados.ativo = v;
-					await this.plugin.salvar();
+					await this.salvar();
 					this.redesenhar();
 				}),
 			);
 
 		if (!this.dados.ativo) return;
+
+		// Repovoada do zero: o painel inteiro foi reconstruído, as prévias antigas morreram
+		// com ele. Sem isto, `atualizarPrevias()` mexeria em elementos fora do DOM.
+		this.previas = [];
 
 		this.tituloLivre(containerEl);
 		this.estiloCoringa(containerEl);
@@ -113,7 +150,7 @@ export class SecaoCallouts {
 			.addToggle((t) =>
 				t.setValue(this.dados.tituloPeloMetadata).onChange(async (v) => {
 					this.dados.tituloPeloMetadata = v;
-					await this.plugin.salvar();
+					await this.salvar();
 				}),
 			);
 	}
@@ -130,6 +167,13 @@ export class SecaoCallouts {
 		});
 
 		const c = this.dados.coringa;
+
+		this.criarPrevia(containerEl, () => ({
+			estilo: resolverEstilo(this.dados.global, c.estilo),
+			cor: c.cor,
+			icone: c.icone,
+		}));
+
 		// CLASSE_IGNORAR: o seletor de cor aqui é para DEFINIR uma cor, então o seletor do
 		// sistema é o comportamento certo.
 		const bloco = containerEl.createDiv({ cls: CLASSE_IGNORAR });
@@ -138,7 +182,7 @@ export class SecaoCallouts {
 		settingCor.addColorPicker((p) =>
 			p.setValue(c.cor ?? "#7852ee").onChange(async (v) => {
 				c.cor = normalizarHex(v) ?? undefined;
-				await this.plugin.salvar();
+				await this.salvar();
 			}),
 		);
 		settingCor.addExtraButton((b) =>
@@ -147,7 +191,7 @@ export class SecaoCallouts {
 				.setTooltip("Voltar à cor padrão do Obsidian")
 				.onClick(async () => {
 					c.cor = undefined;
-					await this.plugin.salvar();
+					await this.salvar();
 					this.redesenhar();
 				}),
 		);
@@ -161,7 +205,7 @@ export class SecaoCallouts {
 					.setValue(c.icone ?? "")
 					.onChange(async (v) => {
 						c.icone = v.trim() || undefined;
-						await this.plugin.salvar();
+						await this.salvar();
 					}),
 			);
 	}
@@ -172,9 +216,11 @@ export class SecaoCallouts {
 		new Setting(containerEl).setHeading().setName("Estilo de todos os callouts");
 
 		const g = this.dados.global;
-		const salvar = async (): Promise<void> => {
-			await this.plugin.salvar();
-		};
+		const salvar = (): Promise<void> => this.salvar();
+
+		// Sem cor nem ícone: o global não os define (isso é do estilo Padrão e dos nomeados),
+		// então a prévia mostra o azul do Obsidian com a forma configurada aqui.
+		this.criarPrevia(containerEl, () => ({ estilo: g }));
 
 		this.controleNumero(containerEl, g, "larguraBorda", {
 			nome: "Espessura da borda",
@@ -306,7 +352,7 @@ export class SecaoCallouts {
 					.onClick(async () => {
 						this.dados.personalizados.splice(i, 1);
 						if (this.editando === p.tipo) this.editando = null;
-						await this.plugin.salvar();
+						await this.salvar();
 						this.redesenhar();
 					}),
 			);
@@ -330,7 +376,7 @@ export class SecaoCallouts {
 
 		this.dados.personalizados.push({ tipo: sugestao, estilo: {} });
 		this.editando = sugestao;
-		await this.plugin.salvar();
+		await this.salvar();
 		this.redesenhar();
 	}
 
@@ -338,9 +384,13 @@ export class SecaoCallouts {
 		// CLASSE_IGNORAR: o seletor de cor aqui é para DEFINIR uma cor — o seletor do sistema
 		// é o comportamento certo, então não deixamos o próprio plugin interceptá-lo.
 		const editor = containerEl.createDiv({ cls: `customize-editor-cores ${CLASSE_IGNORAR}` });
-		const salvar = async (): Promise<void> => {
-			await this.plugin.salvar();
-		};
+		const salvar = (): Promise<void> => this.salvar();
+
+		this.criarPrevia(editor, () => ({
+			estilo: resolverEstilo(this.dados.global, p.estilo),
+			cor: p.cor,
+			icone: p.icone,
+		}));
 
 		new Setting(editor)
 			.setName("Identificador do estilo")
@@ -475,7 +525,7 @@ export class SecaoCallouts {
 
 						// Importar sem ligar a customização deixaria a impressão de que não funcionou.
 						this.dados.ativo = true;
-						await this.plugin.salvar();
+						await this.salvar();
 						this.redesenhar();
 
 						const pulados = callouts.length - novos.length;
