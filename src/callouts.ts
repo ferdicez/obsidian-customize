@@ -15,7 +15,7 @@
  * Por isso, para mudar cor/ícone de um tipo, o seletor precisa ser no mínimo
  * `.callout[data-callout="x"]` — um `.callout { ... }` genérico NÃO vence a regra por tipo.
  *
- * Três armadilhas que o CSS abaixo trata:
+ * ── ARMADILHAS ────────────────────────────────────────────────────────────────────────────
  *
  * 1. `--callout-color` é um TRIPLET RGB ("233, 49, 71"), nunca hex. O Obsidian consome como
  *    `rgb(var(--callout-color))`. Passar hex quebra silenciosamente.
@@ -23,18 +23,44 @@
  *    no app.css. Para mudar, sobrescrevemos a propriedade `background-color` direto.
  * 3. `mix-blend-mode: darken|lighten` "lava" qualquer cor de fundo customizada. Quem mexe em
  *    fundo quase sempre quer `--callout-blend-mode: normal` junto.
- * 4. O TÍTULO TEM DUAS CAMADAS, e a de baixo descarta a cor da de cima:
- *       .callout-title       { color: rgb(var(--callout-color)); }   <- nossa cor chega aqui
- *       .callout-title-inner { color: var(--callout-title-color); }  <- e é descartada aqui
- *    Como `--callout-title-color` tem default `inherit`, o texto do título herda a cor do CORPO
- *    DA NOTA (preto no tema claro) em vez da cor do callout. Por isso definir `--callout-color`
- *    sozinho deixa o título preto — é obrigatório emitir `--callout-title-color` junto.
- *    Borda e ícone não passam por essa camada, então continuam funcionando só com a cor: é o que
- *    torna o sintoma confuso (a cor "funciona", mas o título não).
  *
- * E uma limitação conhecida: trocar `--callout-icon` NÃO re-renderiza um callout já na tela
- * (o Obsidian só lê a variável no momento do render, e há uma guarda `if (t.firstChild) return`).
- * Precisa reabrir a nota. Está documentado na UI.
+ * ── As armadilhas 4–7 são A MESMA COISA em lugares diferentes ─────────────────────────────
+ *
+ * O Obsidian está migrando suas regras para consumir `--callout-color` DIRETO, sem envolver o
+ * triplet em `rgb()`. Onde ele faz isso, o valor é inválido, a declaração inteira é descartada
+ * e a propriedade cai no valor inicial — PRETO. Já apareceu quatro vezes:
+ *
+ * 4. TÍTULO — `.callout-title-inner { color: var(--callout-title-color) }`, default `inherit`,
+ *    descarta a cor que `.callout-title` aplica acima. Corrigido emitindo `--callout-title-color`.
+ * 5. BORDA — `border-color: color-mix(in oklch, var(--callout-color) ..., transparent)`.
+ *    `color-mix()` exige uma cor; o triplet cru não é. Corrigido emitindo `border-color` em rgba().
+ * 6. ÍCONE — `.callout-icon .svg-icon { color: var(--callout-color) }`. Corrigido emitindo `color`
+ *    no `.callout-icon` (o svg do Lucide usa `stroke: currentColor`, então colorir o pai basta).
+ * 7. BASE EMBUTIDA — `--bases-embed-border-color` / `--bases-table-border-color` /
+ *    `--table-border-color`, todas com `color-mix()` sobre o triplet cru. Corrigido reemitindo as
+ *    três com `rgb()` em volta.
+ *
+ * O padrão do conserto é sempre o mesmo: onde o bloco TEM cor literal (coringa, estilos
+ * nomeados) emitimos `rgb(<triplet>)`; no bloco GLOBAL emitimos `rgb(var(--callout-color))`,
+ * que conserta também os callouts NATIVOS — quem varia por tipo é a variável, não a regra.
+ *
+ * ⚠️ Se um elemento novo do callout aparecer sem cor, suspeite disto ANTES de qualquer outra
+ * hipótese. E não confie no app.css extraído do disco para checar: ele é do instalador e fica
+ * defasado do que roda de fato. O diagnóstico confiável é `getComputedStyle` no DevTools —
+ * a fórmula quebrada aparece literalmente ("color-mix(in oklch, 163, 163, 163 25%, ...)").
+ * Ver o bloco "LEIA ANTES DE MEXER EM CSS DE CALLOUT" em `plugins/_docs/customize.md`.
+ *
+ * ── Especificidade ────────────────────────────────────────────────────────────────────────
+ *
+ * O bloco global usa `.callout.callout` (0,2,0), não `.callout` (0,1,0): temas estilizam callout
+ * com seletor composto — o Minimal, no estilo "Outlined", usa `.callouts-outlined .callout` — e
+ * venceriam. Ver o comentário de `SEL_GLOBAL`.
+ *
+ * ── Limitação conhecida ───────────────────────────────────────────────────────────────────
+ *
+ * Trocar `--callout-icon` NÃO re-renderiza um callout já na tela (o Obsidian só lê a variável no
+ * momento do render, e há uma guarda `if (t.firstChild) return`). Precisa reabrir a nota. Está
+ * documentado na UI.
  */
 
 import { hexParaRgb } from "./cores";
