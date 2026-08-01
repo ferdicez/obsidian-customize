@@ -6,7 +6,8 @@
  * Variáveis declaradas em `body` (especificidade 0,0,1 — fácil de vencer):
  *   --callout-border-width: 0px      --callout-radius: var(--radius-s)  (4px)
  *   --callout-border-opacity: 0.25   --callout-padding: 12px 12px 12px 24px
- *   --callout-title-weight: 600      --callout-blend-mode: darken|lighten
+ *   --callout-title-weight: 600      --callout-blend-mode: var(--highlight-mix-blend-mode)
+ *   --callout-title-color: inherit   <- ADICIONADA numa atualização; ver armadilha 4
  *
  * Variáveis declaradas em `.callout` (0,1,0) e sobrescritas em `.callout[data-callout="x"]` (0,2,0):
  *   --callout-color: r, g, b         --callout-icon: lucide-pencil
@@ -22,6 +23,14 @@
  *    no app.css. Para mudar, sobrescrevemos a propriedade `background-color` direto.
  * 3. `mix-blend-mode: darken|lighten` "lava" qualquer cor de fundo customizada. Quem mexe em
  *    fundo quase sempre quer `--callout-blend-mode: normal` junto.
+ * 4. O TÍTULO TEM DUAS CAMADAS, e a de baixo descarta a cor da de cima:
+ *       .callout-title       { color: rgb(var(--callout-color)); }   <- nossa cor chega aqui
+ *       .callout-title-inner { color: var(--callout-title-color); }  <- e é descartada aqui
+ *    Como `--callout-title-color` tem default `inherit`, o texto do título herda a cor do CORPO
+ *    DA NOTA (preto no tema claro) em vez da cor do callout. Por isso definir `--callout-color`
+ *    sozinho deixa o título preto — é obrigatório emitir `--callout-title-color` junto.
+ *    Borda e ícone não passam por essa camada, então continuam funcionando só com a cor: é o que
+ *    torna o sintoma confuso (a cor "funciona", mas o título não).
  *
  * E uma limitação conhecida: trocar `--callout-icon` NÃO re-renderiza um callout já na tela
  * (o Obsidian só lê a variável no momento do render, e há uma guarda `if (t.firstChild) return`).
@@ -127,6 +136,12 @@ export const TIPOS_EMBUTIDOS: Array<{ nome: string; aliases: string[] }> = [
  */
 const NOMES_NATIVOS: string[] = TIPOS_EMBUTIDOS.flatMap((t) => [t.nome, ...t.aliases]);
 
+/** Opacidade de fundo que o Obsidian usa nativamente (`rgba(var(--callout-color), 0.1)`). */
+const OPACIDADE_FUNDO_PADRAO = 0.1;
+
+/** Opacidade de borda nativa do Obsidian (`--callout-border-opacity: 0.25` no body). */
+const OPACIDADE_BORDA_PADRAO = 0.25;
+
 const JUSTIFY: Record<AlinhamentoTitulo, string> = {
 	esquerda: "flex-start",
 	centro: "center",
@@ -140,7 +155,35 @@ function regrasDoCallout(estilo: EstiloCallout, cor?: string): string[] {
 	if (cor) {
 		const rgb = hexParaRgb(cor);
 		// Triplet sem rgb(): é assim que o Obsidian consome a variável.
-		if (rgb) regras.push(`--callout-color: ${rgb};`);
+		if (rgb) {
+			regras.push(`--callout-color: ${rgb};`);
+			// A partir da versão que introduziu `--callout-title-color`, o `.callout-title-inner`
+			// declara `color: var(--callout-title-color)`, cujo padrão é `inherit` — ou seja, o
+			// texto do título herda a cor do corpo da nota (preto no tema claro) e DESCARTA a cor
+			// que `.callout-title` aplica logo acima. Sem esta linha, escolher qualquer cor
+			// resulta num título preto. Borda e ícone não passam por essa camada e por isso
+			// continuavam funcionando — foi o que tornou o sintoma confuso.
+			regras.push(`--callout-title-color: rgb(${rgb});`);
+
+			// ARMADILHA 5 — `color-mix()` não aceita triplet, e é o que o Obsidian passou a usar
+			// na borda:
+			//     border-color: color-mix(in oklch, var(--callout-color)
+			//                   calc(var(--callout-border-opacity) * 100%), transparent)
+			// `--callout-color` é "203, 108, 149" (triplet, sem `rgb()`), que NÃO é uma cor válida
+			// para `color-mix()`. A função inteira falha e o `border-color` cai no valor inicial:
+			// PRETO. O título continuava certo porque usa `rgb(var(--callout-color))`, forma que
+			// aceita triplet — daí o sintoma "título colorido, linha preta".
+			//
+			// Emitimos `border-color` sem depender de `color-mix()`. Repare que a OPACIDADE vai por
+			// `var(--callout-border-opacity)`, não pelo valor literal deste estilo: cor e opacidade
+			// costumam vir de blocos DIFERENTES (a cor no coringa/tipo, a opacidade no global), e
+			// fixar aqui o padrão 0.25 faria este bloco — mais específico e emitido depois —
+			// sobrescrever a intensidade que ela configurou no global. Com a variável, cada bloco
+			// contribui com o que sabe e a cascata resolve o resto.
+			regras.push(
+				`border-color: rgba(${rgb}, var(--callout-border-opacity, ${OPACIDADE_BORDA_PADRAO}));`,
+			);
+		}
 	}
 
 	if (estilo.larguraBorda !== undefined) {
@@ -148,6 +191,13 @@ function regrasDoCallout(estilo: EstiloCallout, cor?: string): string[] {
 	}
 	if (estilo.opacidadeBorda !== undefined) {
 		regras.push(`--callout-border-opacity: ${estilo.opacidadeBorda};`);
+		// Sem `cor` neste bloco (caso do estilo global, onde a cor vem do coringa ou do tipo) o
+		// `border-color` acima não foi emitido — mas a regra com `color-mix()` continua quebrada.
+		// `rgb(var(--callout-color))` envolve o triplet e devolve uma cor de verdade; o segundo
+		// argumento de `rgba()` aceita a opacidade direto. Ver ARMADILHA 5.
+		if (!cor) {
+			regras.push(`border-color: rgba(var(--callout-color), ${estilo.opacidadeBorda});`);
+		}
 	}
 	if (estilo.radius !== undefined) {
 		regras.push(`--callout-radius: ${estilo.radius}px;`);
@@ -158,6 +208,17 @@ function regrasDoCallout(estilo: EstiloCallout, cor?: string): string[] {
 	if (estilo.opacidadeFundo !== undefined) {
 		// Não há variável de fundo no Obsidian: sobrescrevemos a propriedade direto.
 		regras.push(`background-color: rgba(var(--callout-color), ${estilo.opacidadeFundo});`);
+		// `mix-blend-mode: darken|lighten` (o padrão do Obsidian, via --highlight-mix-blend-mode)
+		// mistura este fundo com o da nota e achata a diferença entre uma intensidade e outra —
+		// mexer no slider parece não fazer efeito.
+		//
+		// Só desligamos o blend quando a intensidade FOGE do padrão do Obsidian (0.1). Em 0.1 a
+		// aparência pretendida é a nativa, e forçar `normal` ali mudaria o visual dos callouts
+		// embutidos sem que ninguém tenha pedido. `corSolida` continua sendo o controle explícito
+		// e já emite `normal` por conta própria logo abaixo.
+		if (!estilo.corSolida && estilo.opacidadeFundo !== OPACIDADE_FUNDO_PADRAO) {
+			regras.push(`--callout-blend-mode: normal;`);
+		}
 	}
 	if (estilo.corSolida) {
 		// darken/lighten distorcem o fundo customizado; normal mostra a cor como ela é.
@@ -201,6 +262,26 @@ function escaparTipo(tipo: string): string {
 }
 
 /**
+ * Seletor do bloco GLOBAL. `:is(.callout)` em vez de `.callout` puro.
+ *
+ * Por quê: `.callout` sozinho é 0,1,0, e TEMAS estilizam callout com seletor mais específico —
+ * o Minimal, por exemplo, usa `.callouts-outlined .callout` (0,2,0) no estilo "Outlined", com
+ * `--callout-border-opacity: 0.5` e `background-color: transparent`. Sendo 0,2,0 contra os
+ * nossos 0,1,0, o TEMA VENCE SEMPRE, não importa a ordem no <head>: a intensidade de borda e de
+ * fundo configuradas aqui eram silenciosamente descartadas.
+ *
+ * A solução é `.callout.callout`: repetir a MESMA classe no seletor composto soma especificidade
+ * de verdade (0,2,0) sem mudar nada do que casa. (Cuidado: `:is(.callout, .callout)` NÃO serve —
+ * `:is()` assume a especificidade do argumento mais específico, e como os dois são `.callout`,
+ * o resultado continua 0,1,0. Testado: o tema seguia vencendo.)
+ *
+ * Empatamos com o tema em 0,2,0 e ganhamos pela ordem (nosso <style> volta ao fim do head a cada
+ * reaplicação). Não subimos mais que isso de propósito: 0,2,0 é o mesmo patamar das regras por
+ * tipo, e continua sobrescrevível por um snippet da usuária.
+ */
+const SEL_GLOBAL = ".callout.callout";
+
+/**
  * Gera todo o CSS de callouts. Devolve string vazia se não houver nada a aplicar — assim o
  * `<style>` fica vazio em vez de conter regras inúteis.
  */
@@ -210,15 +291,18 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 	const partes: string[] = [];
 
 	// ── Global ────────────────────────────────────────────────────────────────────────────
-	// `.callout` (0,1,0) basta para as variáveis que o Obsidian declara em `body` (0,0,1).
-	partes.push(bloco(".callout", regrasDoCallout(dados.global)));
-	partes.push(bloco(".callout > .callout-title", regrasDoTitulo(dados.global)));
+	// SEL_GLOBAL é `:is(.callout, .callout)` = 0,2,0, para empatar com temas que estilizam
+	// callout por seletor composto (ver o comentário de SEL_GLOBAL). `.callout` puro perdia.
+	partes.push(bloco(SEL_GLOBAL, regrasDoCallout(dados.global)));
+	partes.push(bloco(`${SEL_GLOBAL} > .callout-title`, regrasDoTitulo(dados.global)));
 
 	if (dados.global.mostrarIcone === false) {
-		partes.push(bloco(".callout > .callout-title > .callout-icon", ["display: none;"]));
+		partes.push(bloco(`${SEL_GLOBAL} > .callout-title > .callout-icon`, ["display: none;"]));
 	} else {
-		partes.push(bloco(".callout > .callout-title > .callout-icon", regrasDoIcone(dados.global)));
-		partes.push(bloco(".callout > .callout-title > .callout-icon > svg", regrasDoSvg(dados.global)));
+		partes.push(bloco(`${SEL_GLOBAL} > .callout-title > .callout-icon`, regrasDoIcone(dados.global)));
+		partes.push(
+			bloco(`${SEL_GLOBAL} > .callout-title > .callout-icon > svg`, regrasDoSvg(dados.global)),
+		);
 	}
 
 	// ── Coringa ("Padrão"): qualquer nome que o Obsidian não conhece ──────────────────────

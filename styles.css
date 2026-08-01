@@ -223,7 +223,9 @@ forma global: ao desativar o plugin, nada deve sobrar visualmente.
 	/* Fundo da nota, não do painel: o callout precisa ser visto sobre o que ele terá
 	   de fundo de verdade, senão a percepção de contraste engana. */
 	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
+	/* SEM borda de propósito. Uma moldura de 1px aqui encosta na borda do callout (que também
+	   costuma ser 1px) e as duas se fundem — a cor escolhida passa a ser lida como "linha
+	   preta", que foi exatamente o relato. O fundo já delimita a prévia sozinho. */
 }
 
 /* O .callout dentro da prévia herda as regras nativas do Obsidian; só neutralizamos a
