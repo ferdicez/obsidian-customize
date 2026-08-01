@@ -1,7 +1,7 @@
 {
 	"id": "customize",
 	"name": "Customize",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"minAppVersion": "1.4.10",
 	"description": "Paletas de cores com atalho para copiar o código hex, e personalização de callouts (nome livre, cor, ícone e aparência).",
 	"author": "ferdicez",

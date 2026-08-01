@@ -142,6 +142,37 @@ const OPACIDADE_FUNDO_PADRAO = 0.1;
 /** Opacidade de borda nativa do Obsidian (`--callout-border-opacity: 0.25` no body). */
 const OPACIDADE_BORDA_PADRAO = 0.25;
 
+/**
+ * ARMADILHA 7 — as variáveis de Base embutida dentro de callout, pela quarta vez o mesmo triplet.
+ *
+ * O Obsidian tinge a moldura de uma Base embutida com a cor do callout que a contém:
+ *
+ *     .callout {
+ *       --bases-embed-border-color: color-mix(in oklch, var(--callout-color) 25%, ...);
+ *       --bases-table-border-color: ...;  --table-border-color: ...;
+ *     }
+ *
+ * Confirmado no DevTools dela que o valor computado sai literalmente
+ * `color-mix(in oklch, 163, 163, 163 25%, white 50%)` — o triplet entrou CRU, sem `rgb()`. A
+ * função é inválida, a variável não resolve e a moldura cai em PRETO. (Na versão anterior a
+ * regra tinha `rgb(var(--callout-color))` e funcionava; a nova tirou o wrapper.)
+ *
+ * Reemitimos as três já com `rgb()` em volta do triplet. Vão no bloco GLOBAL, com a forma
+ * `rgb(var(--callout-color))`, porque o problema atinge TODO callout que embute uma Base —
+ * inclusive os nativos e o `quote` cinza, que não têm cor configurada por ela.
+ *
+ * Os 25%/50% reproduzem a fórmula nativa, para a aparência continuar sendo a pretendida pelo
+ * Obsidian; só consertamos o argumento que ele quebrou.
+ */
+const VARIAVEIS_BASE_EMBUTIDA = [
+	"--bases-embed-border-color",
+	"--bases-table-border-color",
+	"--table-border-color",
+].map(
+	(nome) =>
+		`${nome}: color-mix(in srgb, rgb(var(--callout-color)) 25%, var(--background-primary) 50%);`,
+);
+
 const JUSTIFY: Record<AlinhamentoTitulo, string> = {
 	esquerda: "flex-start",
 	centro: "center",
@@ -308,7 +339,10 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 	// ── Global ────────────────────────────────────────────────────────────────────────────
 	// SEL_GLOBAL é `.callout.callout` = 0,2,0, para empatar com temas que estilizam callout por
 	// seletor composto (ver o comentário de SEL_GLOBAL). `.callout` puro perdia.
-	partes.push(bloco(SEL_GLOBAL, regrasDoCallout(dados.global)));
+	//
+	// As variáveis de Base embutida entram aqui (e não em `regrasDoCallout`) porque o conserto
+	// vale para TODO callout, tenha ela configurado cor nele ou não — ver ARMADILHA 7.
+	partes.push(bloco(SEL_GLOBAL, [...regrasDoCallout(dados.global), ...VARIAVEIS_BASE_EMBUTIDA]));
 	partes.push(bloco(`${SEL_GLOBAL} > .callout-title`, regrasDoTitulo(dados.global)));
 
 	if (dados.global.mostrarIcone === false) {
