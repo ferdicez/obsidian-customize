@@ -240,9 +240,24 @@ function regrasDoTitulo(estilo: EstiloCallout): string[] {
  * qualquer regra CSS, mas só se existir uma. Por isso mandamos os dois: a variável (que é o
  * caminho oficial e cobre temas que a consomem) e width/height explícitos no svg.
  */
-function regrasDoIcone(estilo: EstiloCallout): string[] {
-	if (estilo.tamanhoIcone === undefined) return [];
-	return [`--icon-size: ${estilo.tamanhoIcone}px;`];
+function regrasDoIcone(estilo: EstiloCallout, cor?: string): string[] {
+	const regras: string[] = [];
+	if (estilo.tamanhoIcone !== undefined) {
+		regras.push(`--icon-size: ${estilo.tamanhoIcone}px;`);
+	}
+	// ARMADILHA 6 — a cor do ícone caiu no mesmo problema do triplet que a borda (ARMADILHA 5).
+	// A regra nativa virou `.callout-icon .svg-icon { color: var(--callout-color) }`, sem o
+	// `rgb()` em volta — então resolve para `color: 203, 108, 149`, que não é cor válida. A
+	// declaração é descartada e o ícone herda o cinza do texto da nota.
+	//
+	// O `color` vai no `.callout-icon` (pai do svg) porque o `<svg>` do Lucide usa
+	// `stroke: currentColor`: colorir o pai basta e não depende de qual elemento o Obsidian
+	// escolhe estilizar. Emitido junto da cor, independente de `tamanhoIcone` estar definido.
+	if (cor) {
+		const rgb = hexParaRgb(cor);
+		if (rgb) regras.push(`color: rgb(${rgb});`);
+	}
+	return regras;
 }
 
 /** Regras aplicadas ao `<svg>` dentro do ícone — ver `regrasDoIcone`. */
@@ -291,15 +306,21 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 	const partes: string[] = [];
 
 	// ── Global ────────────────────────────────────────────────────────────────────────────
-	// SEL_GLOBAL é `:is(.callout, .callout)` = 0,2,0, para empatar com temas que estilizam
-	// callout por seletor composto (ver o comentário de SEL_GLOBAL). `.callout` puro perdia.
+	// SEL_GLOBAL é `.callout.callout` = 0,2,0, para empatar com temas que estilizam callout por
+	// seletor composto (ver o comentário de SEL_GLOBAL). `.callout` puro perdia.
 	partes.push(bloco(SEL_GLOBAL, regrasDoCallout(dados.global)));
 	partes.push(bloco(`${SEL_GLOBAL} > .callout-title`, regrasDoTitulo(dados.global)));
 
 	if (dados.global.mostrarIcone === false) {
 		partes.push(bloco(`${SEL_GLOBAL} > .callout-title > .callout-icon`, ["display: none;"]));
 	} else {
-		partes.push(bloco(`${SEL_GLOBAL} > .callout-title > .callout-icon`, regrasDoIcone(dados.global)));
+		// O global não tem cor própria (ela vem do coringa/tipo), então aqui a cor do ícone sai
+		// pela variável — `rgb(var(--callout-color))` envolve o triplet e conserta a regra nativa
+		// quebrada (ARMADILHA 6) para TODOS os callouts, inclusive os nativos, que continuam com
+		// a cor deles porque a variável é quem muda por tipo.
+		const iconeGlobal = regrasDoIcone(dados.global);
+		iconeGlobal.push("color: rgb(var(--callout-color));");
+		partes.push(bloco(`${SEL_GLOBAL} > .callout-title > .callout-icon`, iconeGlobal));
 		partes.push(
 			bloco(`${SEL_GLOBAL} > .callout-title > .callout-icon > svg`, regrasDoSvg(dados.global)),
 		);
@@ -314,7 +335,7 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 	if (dados.coringa.icone) coringaRegras.push(`--callout-icon: ${dados.coringa.icone};`);
 
 	const coringaTitulo = regrasDoTitulo(dados.coringa.estilo);
-	const coringaIcone = regrasDoIcone(dados.coringa.estilo);
+	const coringaIcone = regrasDoIcone(dados.coringa.estilo, dados.coringa.cor);
 
 	if (coringaRegras.length > 0 || coringaTitulo.length > 0 || coringaIcone.length > 0) {
 		// Exclui os nativos E os tipos já personalizados — estes têm regra própria e não
@@ -356,7 +377,7 @@ export function gerarCssCallouts(dados: DadosCallouts): string {
 		if (p.estilo.mostrarIcone === false) {
 			partes.push(bloco(`${sel} > .callout-title > .callout-icon`, ["display: none;"]));
 		} else {
-			const regrasIcone = regrasDoIcone(p.estilo);
+			const regrasIcone = regrasDoIcone(p.estilo, p.cor);
 			if (p.estilo.mostrarIcone === true && dados.global.mostrarIcone === false) {
 				regrasIcone.unshift("display: flex;");
 			}
@@ -401,7 +422,11 @@ export function gerarCssPrevia(
 	if (estiloResolvido.mostrarIcone === false) {
 		partes.push(bloco(`${base} > .callout-title > .callout-icon`, ["display: none;"]));
 	} else {
-		partes.push(bloco(`${base} > .callout-title > .callout-icon`, regrasDoIcone(estiloResolvido)));
+		// `cor` aqui é a do estilo previsualizado; sem ela a prévia cai na cor do Obsidian, então
+		// a forma com variável cobre esse caso — mesma lógica do bloco global.
+		const iconePrevia = regrasDoIcone(estiloResolvido, cor);
+		if (!cor) iconePrevia.push("color: rgb(var(--callout-color));");
+		partes.push(bloco(`${base} > .callout-title > .callout-icon`, iconePrevia));
 		partes.push(bloco(`${base} > .callout-title > .callout-icon > svg`, regrasDoSvg(estiloResolvido)));
 	}
 

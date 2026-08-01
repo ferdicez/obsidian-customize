@@ -1,6 +1,6 @@
 {
 	"name": "customize",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"description": "Plugin Obsidian: paletas de cores com atalho para copiar o hex, e personalização de callouts",
 	"main": "main.js",
 	"scripts": {
