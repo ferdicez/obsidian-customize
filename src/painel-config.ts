@@ -1,4 +1,5 @@
 ﻿import { App, PluginSettingTab, Setting, setIcon } from "obsidian";
+import { abrirAcordeao, criarAcordeao } from "./acordeao";
 import { SecaoCallouts } from "./config-callouts";
 import { normalizarHex, precisaBorda } from "./cores";
 import { criarPaleta, moverCor, paletaAtiva, removerPaleta, type Paleta } from "./dados";
@@ -39,23 +40,27 @@ export class PainelConfigCustomize extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
+
+		// Guarda e devolve o scroll. `display()` é chamado a cada mudança (trocar uma cor, mexer
+		// num slider, abrir um editor) e recria o painel inteiro; sem isto, cada clique joga a
+		// usuária de volta ao topo e ela precisa se reencontrar na lista.
+		const rolagem = this.acharRolagem();
+		const posicao = rolagem?.scrollTop ?? 0;
+
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Customize" });
+		// Escopo de todo o CSS do painel (regra 1 de `_docs/painel-de-configuracoes.md`). Sem ela
+		// as regras de "linha em vez de cartão" vazariam para as configurações dos outros plugins.
+		// Não há `h2` com o nome do plugin: o Obsidian já o mostra no cabeçalho da janela.
+		containerEl.addClass("customize-config");
 
-		new Setting(containerEl).setHeading().setName("Paleta de cores");
-		containerEl.createEl("p", {
-			cls: "setting-item-description",
-			text:
-				"Um atalho de teclado abre a paleta com os códigos à mostra. Clicar numa cor copia o " +
-				"código e a paleta continua aberta, para copiar várias em sequência.",
-		});
-
-		this.secaoAtalho(containerEl);
-		this.secaoPaletas(containerEl);
-		this.secaoSeletorNativo(containerEl);
-		this.secaoAvancado(containerEl);
-		this.secaoCallouts.render(containerEl);
+		// As duas primeiras seções nascem abertas: são o que ela mexe no dia a dia (qual paleta o
+		// atalho abre, quais cores tem dentro). O resto é ajuste raro e nasce fechado, para o
+		// painel caber numa tela em vez de exigir rolagem para se localizar.
+		this.blocoAtalho(containerEl);
+		this.blocoPaletas(containerEl);
+		this.blocoSeletorNativo(containerEl);
+		this.blocoCallouts(containerEl);
 
 		// A checagem de "o Callout Manager está instalado?" toca o disco. Fazemos fora do
 		// caminho de desenho e redesenhamos só se o resultado mudar algo — assim o render
@@ -64,6 +69,43 @@ export class PainelConfigCustomize extends PluginSettingTab {
 			this.checouCalloutManager = true;
 			void this.secaoCallouts.preparar().then(() => this.display());
 		}
+
+		if (rolagem && posicao > 0) {
+			// Depois do layout: o conteúdo acabou de ser recriado e a altura só é conhecida agora.
+			// Sem o requestAnimationFrame o scrollTop é cortado para a altura antiga (menor).
+			window.requestAnimationFrame(() => {
+				rolagem.scrollTop = posicao;
+			});
+		}
+	}
+
+	/**
+	 * O elemento que realmente rola. O Obsidian coloca o conteúdo das configurações dentro de um
+	 * `.vertical-tab-content`, que é quem tem o overflow — `containerEl` em si não rola. Se essa
+	 * estrutura mudar, caímos no próprio containerEl em vez de quebrar.
+	 */
+	private acharRolagem(): HTMLElement | null {
+		const proprio = this.containerEl;
+		if (proprio.scrollHeight > proprio.clientHeight) return proprio;
+		return proprio.closest<HTMLElement>(".vertical-tab-content") ?? null;
+	}
+
+	/**
+	 * "Como abrir a paleta": o atalho e qual paleta ele abre. É a pergunta que a usuária faz
+	 * primeiro ao entrar no painel, então abre por padrão e vem antes da lista de paletas.
+	 */
+	private blocoAtalho(containerEl: HTMLElement): void {
+		const acordeao = criarAcordeao(containerEl, {
+			chave: "customize:atalho",
+			titulo: "Paleta de cores",
+			descricao:
+				"Um atalho de teclado abre a paleta com os códigos à mostra. Clicar numa cor copia o " +
+				"código e a paleta continua aberta, para copiar várias em sequência.",
+			resumo: paletaAtiva(this.plugin.dados).nome,
+			abertoPorPadrao: true,
+		});
+
+		acordeao.sePreenchido((corpo) => this.secaoAtalho(corpo));
 	}
 
 	private secaoAtalho(containerEl: HTMLElement): void {
@@ -98,22 +140,42 @@ export class PainelConfigCustomize extends PluginSettingTab {
 			});
 	}
 
-	private secaoPaletas(containerEl: HTMLElement): void {
-		new Setting(containerEl)
-			.setHeading()
-			.setName("Paletas")
-			.addButton((b) =>
-				b
-					.setButtonText("Nova paleta")
-					.setCta()
-					.onClick(async () => {
-						const nova = criarPaleta(this.plugin.dados, "Nova paleta");
-						this.editando = nova.id;
-						await this.plugin.salvar();
-						this.display();
-					}),
-			);
+	/**
+	 * A lista de paletas. Nasce aberta porque é onde ela edita cores — e porque o editor inline
+	 * de uma paleta é desenhado aqui dentro: se a seção estivesse fechada, clicar em "Editar
+	 * cores" abriria um editor invisível.
+	 */
+	private blocoPaletas(containerEl: HTMLElement): void {
+		const total = this.plugin.dados.paletas.length;
+		const acordeao = criarAcordeao(containerEl, {
+			chave: "customize:paletas",
+			titulo: "Paletas",
+			resumo: `${total} ${total === 1 ? "paleta" : "paletas"}`,
+			abertoPorPadrao: true,
+		});
 
+		// O botão de criar vive no cabeçalho: dentro de `-acoes`, que o acordeão trata como zona
+		// morta de clique, para criar uma paleta não fechar a seção onde ela vai aparecer.
+		const acoes = acordeao.cabecalho.createDiv({ cls: "customize-acordeao-acoes" });
+		new Setting(acoes).addButton((b) =>
+			b
+				.setButtonText("Nova paleta")
+				.setCta()
+				.onClick(async () => {
+					const nova = criarPaleta(this.plugin.dados, "Nova paleta");
+					this.editando = nova.id;
+					// A paleta nova nasce com o editor aberto; a seção precisa estar aberta junto,
+					// senão o botão parece não ter feito nada.
+					abrirAcordeao("customize:paletas");
+					await this.plugin.salvar();
+					this.display();
+				}),
+		);
+
+		acordeao.sePreenchido((corpo) => this.secaoPaletas(corpo));
+	}
+
+	private secaoPaletas(containerEl: HTMLElement): void {
 		this.plugin.dados.paletas.forEach((paleta) => {
 			const ativa = paleta.id === paletaAtiva(this.plugin.dados).id;
 			const setting = new Setting(containerEl)
@@ -178,7 +240,10 @@ export class PainelConfigCustomize extends PluginSettingTab {
 		const editor = containerEl.createDiv({ cls: `customize-editor-cores ${CLASSE_IGNORAR}` });
 
 		if (paleta.cores.length === 0) {
-			editor.createDiv({ cls: "customize-vazio", text: "Nenhuma cor ainda. Adicione a primeira abaixo." });
+			editor.createDiv({
+				cls: "customize-config-vazio",
+				text: "Nenhuma cor ainda. Adicione a primeira abaixo.",
+			});
 		}
 
 		paleta.cores.forEach((cor, i) => {
@@ -271,17 +336,30 @@ export class PainelConfigCustomize extends PluginSettingTab {
 		botao.addEventListener("click", () => void aoClicar());
 	}
 
-	private secaoSeletorNativo(containerEl: HTMLElement): void {
-		new Setting(containerEl).setHeading().setName("Seletor de cor do Obsidian");
-
-		containerEl.createEl("p", {
-			cls: "setting-item-description",
-			text:
+	/**
+	 * Substituição do seletor nativo, com "Avançado" junto: as exceções só existem quando a
+	 * substituição está ligada, então separá-las em duas seções irmãs deixaria uma delas
+	 * aparecendo e sumindo sozinha na lista. Fechada por padrão — é um ajuste de uma vez só.
+	 */
+	private blocoSeletorNativo(containerEl: HTMLElement): void {
+		const ligado = this.plugin.dados.interceptacaoAtiva;
+		const acordeao = criarAcordeao(containerEl, {
+			chave: "customize:seletor-nativo",
+			titulo: "Seletor de cor do Obsidian",
+			descricao:
 				"Opcional: além do atalho, substituir também o seletor de cor do próprio Obsidian " +
 				"pela paleta. Afeta as configurações de aparência e as de outros plugins, então " +
 				"vem desligado.",
+			resumo: ligado ? "Substituindo" : "Desligado",
 		});
 
+		acordeao.sePreenchido((corpo) => {
+			this.secaoSeletorNativo(corpo);
+			this.secaoAvancado(corpo);
+		});
+	}
+
+	private secaoSeletorNativo(containerEl: HTMLElement): void {
 		new Setting(containerEl)
 			.setName("Substituir o seletor de cor nativo")
 			.setDesc("Desligue se algum seletor parar de funcionar — as cores voltam ao seletor do sistema.")
@@ -310,8 +388,24 @@ export class PainelConfigCustomize extends PluginSettingTab {
 		// Só faz sentido com a substituição ligada — é o único caminho que intercepta seletores.
 		if (!this.plugin.dados.interceptacaoAtiva) return;
 
-		new Setting(containerEl).setHeading().setName("Avançado");
+		// Aninhado: é exceção da substituição, não um assunto irmão dela.
+		const acordeao = criarAcordeao(containerEl, {
+			chave: "customize:avancado",
+			titulo: "Avançado",
+			aninhado: true,
+			resumo: this.resumoExcecoes(),
+		});
 
+		acordeao.sePreenchido((corpo) => this.secaoExcecoes(corpo));
+	}
+
+	private resumoExcecoes(): string | undefined {
+		const total = this.plugin.dados.seletoresIgnorados.length;
+		if (total === 0) return undefined;
+		return `${total} ${total === 1 ? "exceção" : "exceções"}`;
+	}
+
+	private secaoExcecoes(containerEl: HTMLElement): void {
 		new Setting(containerEl)
 			.setName("Não substituir nestes lugares")
 			.setDesc(
@@ -330,5 +424,27 @@ export class PainelConfigCustomize extends PluginSettingTab {
 					});
 				t.inputEl.rows = 4;
 			});
+	}
+
+	/**
+	 * Callouts é a maior seção do painel (estilo global, estilo Padrão, lista de estilos
+	 * nomeados, importação), e nada tem a ver com paleta de cores — por isso acordeão próprio,
+	 * fechado por padrão. Fechado ela também não paga o custo das prévias vivas, que redesenham
+	 * um callout de verdade a cada mudança de slider.
+	 */
+	private blocoCallouts(containerEl: HTMLElement): void {
+		const total = this.plugin.dados.callouts.personalizados.length;
+		const acordeao = criarAcordeao(containerEl, {
+			chave: "customize:callouts",
+			titulo: "Callouts",
+			descricao:
+				"Muda a aparência dos callouts (aquelas caixas coloridas com > [!nota]). O estilo " +
+				"global vale para todos; dentro dá para ajustar tipos específicos.",
+			resumo: this.plugin.dados.callouts.ativo
+				? `${total} ${total === 1 ? "estilo" : "estilos"}`
+				: "Desligado",
+		});
+
+		acordeao.sePreenchido((corpo) => this.secaoCallouts.render(corpo));
 	}
 }

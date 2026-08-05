@@ -145,6 +145,62 @@ forma global: ao desativar o plugin, nada deve sobrar visualmente.
 
 /* ── Painel de configurações ───────────────────────────────────────────────────────────── */
 
+/* Linha em vez de cartão. O tema Minimal desenha cada `.setting-item` como um cartão (fundo,
+   borda, cantos); o pedido dela é só uma linha divisória entre os blocos. As variáveis cobrem os
+   temas que as respeitam; o `!important` abaixo cobre os que chegam com especificidade maior. */
+.customize-config {
+	--setting-items-background: transparent;
+	--setting-items-border-width: 0;
+	--setting-items-margin: 0;
+	--setting-items-radius: 0;
+}
+
+.customize-config .setting-item {
+	background: transparent !important;
+	border: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	margin: 0 !important;
+	border-bottom: 1px solid var(--background-modifier-border) !important;
+	padding: 10px 4px !important;
+}
+
+/* O último de cada bloco não repete a linha: ela encostaria na borda do acordeão (que já tem a
+   sua) e sairiam dois traços juntos. */
+.customize-config .setting-item:last-child {
+	border-bottom: none !important;
+}
+
+/* O botão de ação no cabeçalho do acordeão é um `Setting` só para reaproveitar o botão do
+   Obsidian — mas ali ele não é uma linha de configuração, então perde padding, linha e a coluna
+   de texto vazia que empurraria o botão para fora do cabeçalho. */
+.customize-config .customize-acordeao-acoes .setting-item {
+	border: none !important;
+	padding: 0 !important;
+}
+
+.customize-config .customize-acordeao-acoes .setting-item-info {
+	display: none;
+}
+
+/* Estado vazio: ausência de conteúdo, não instrução. Itálico e esmaecido para se ler como um
+   lugar à espera de ser preenchido, e some assim que ela cria o primeiro item. */
+.customize-config-vazio {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	padding: 0.5em 0;
+}
+
+/* Nota: contexto permanente que ajuda a decidir. Diferente do estado vazio — não é ausência, e
+   por isso não é itálico nem some. */
+.customize-config-nota {
+	margin: 0;
+	padding: 0.2em 0 0.6em;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
 .customize-config-preview {
 	display: flex;
 	flex-wrap: wrap;
@@ -301,9 +357,131 @@ forma global: ao desativar o plugin, nada deve sobrar visualmente.
 	font-family: var(--font-monospace);
 }
 
-.customize-vazio {
+/* ── Acordeão ─────────────────────────────────────────────────────────────────────────────
+   Portado do painel do Dash Home (que por sua vez veio do My Tasks), a pedido da usuária. Sem
+   moldura: só a linha divisória embaixo e o recuo do corpo dão a leitura de hierarquia. */
+
+.customize-oculto {
+	display: none !important;
+}
+
+.customize-acordeao {
+	display: block;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--background-modifier-border);
+	text-align: left;
+}
+
+/* O cabeçalho é <button> (foco por teclado), então precisa perder toda a aparência de botão.
+   O !important é necessário: o app estiliza `button` dentro da aba de Configurações com regras
+   mais específicas que estas — sem forçar, o texto sai centralizado e o bloco ganha margem
+   automática. */
+.customize-acordeao-cabecalho {
+	display: flex !important;
+	align-items: flex-start !important;
+	justify-content: flex-start !important;
+	gap: 8px;
+	width: 100% !important;
+	max-width: none !important;
+	margin: 0 !important;
+	padding: 12px 4px !important;
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
+	border-radius: 0 !important;
+	cursor: pointer;
+	text-align: left !important;
+	font-size: var(--font-ui-small);
+	line-height: 1.4;
+	color: var(--text-normal);
+	white-space: normal;
+	height: auto !important;
+}
+
+.customize-acordeao-cabecalho:hover {
+	background: var(--background-modifier-hover) !important;
+}
+
+/* Os textos são filhos do <button>, e o alinhamento centralizado dele vazaria para eles. */
+.customize-acordeao-textos,
+.customize-acordeao-titulo,
+.customize-acordeao-descricao {
+	text-align: left !important;
+}
+
+.customize-acordeao-seta {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	/* Alinha a seta com a primeira linha do título, não com o bloco (que pode ter descrição). */
+	margin-top: 2px;
 	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	font-style: italic;
-	padding: 4px 0;
+	transition: transform 0.12s ease;
+}
+
+.customize-acordeao-aberto > .customize-acordeao-cabecalho .customize-acordeao-seta {
+	transform: rotate(90deg);
+}
+
+.customize-acordeao-seta svg {
+	width: 14px;
+	height: 14px;
+}
+
+.customize-acordeao-textos {
+	min-width: 0;
+	flex: 1;
+}
+
+.customize-acordeao-titulo {
+	font-weight: 600;
+}
+
+.customize-acordeao-descricao {
+	margin-top: 2px;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	white-space: normal;
+}
+
+.customize-acordeao-resumo {
+	flex-shrink: 0;
+	margin-top: 2px;
+	font-size: 0.85em;
+	color: var(--text-faint);
+}
+
+/* Ações no cabeçalho (nova paleta, novo estilo). O acordeão ignora cliques aqui dentro. */
+.customize-acordeao-acoes {
+	display: flex;
+	gap: 2px;
+	flex-shrink: 0;
+	margin-left: 4px;
+}
+
+/* O recuo à esquerda é o que dá a leitura de "dentro de": o conteúdo alinha com o título,
+   depois da seta. */
+.customize-acordeao-corpo {
+	padding: 8px 4px 12px 22px;
+}
+
+/* Nível aninhado: título menor, e o último não repete a linha de baixo — senão dois traços
+   se empilham quando o acordeão de dentro fecha o de fora. */
+.customize-acordeao-aninhado > .customize-acordeao-cabecalho .customize-acordeao-titulo {
+	font-size: 0.95em;
+}
+
+.customize-acordeao-corpo > .customize-acordeao:last-child {
+	border-bottom: none;
+}
+
+/* Dentro de um acordeão, a primeira linha de configuração não precisa da borda de topo do
+   Obsidian — o padding do topo já vem do corpo. */
+.customize-acordeao-corpo > .setting-item:first-child {
+	border-top: none;
+	padding-top: 0;
 }

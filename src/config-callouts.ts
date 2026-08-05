@@ -1,4 +1,5 @@
 ﻿import { Notice, Setting, setIcon } from "obsidian";
+import { abrirAcordeao, criarAcordeao } from "./acordeao";
 import {
 	resolverEstilo,
 	TIPOS_EMBUTIDOS,
@@ -24,6 +25,9 @@ import { PreviaCallout } from "./previa-callout";
 
 /** Limites do slider de tamanho de ícone. 18px é o que o Obsidian usa nos callouts. */
 const TAMANHO_ICONE = { min: 10, max: 48, padrao: 18 };
+
+/** Chave do acordeão dos estilos nomeados — usada também ao criar um estilo, para abri-lo. */
+const CHAVE_NOMEADOS = "customize:callouts:nomeados";
 
 const ALINHAMENTOS: Array<{ valor: AlinhamentoTitulo; rotulo: string }> = [
 	{ valor: "esquerda", rotulo: "Esquerda" },
@@ -95,16 +99,15 @@ export class SecaoCallouts {
 		this.previas.push(atualizar);
 	}
 
+	/**
+	 * Desenhada DENTRO do acordeão "Callouts" do painel — o título e a explicação de abertura
+	 * vivem no cabeçalho dele, não aqui, para não aparecerem duas vezes.
+	 *
+	 * As sub-seções são acordeões aninhados porque são quatro assuntos independentes (nome
+	 * livre, estilo Padrão, estilo de todos, estilos nomeados) e empilhados eles somam mais de
+	 * uma tela de rolagem — que é justamente o que a usuária pediu para resolver.
+	 */
 	render(containerEl: HTMLElement): void {
-		new Setting(containerEl).setHeading().setName("Callouts");
-
-		containerEl.createEl("p", {
-			cls: "setting-item-description",
-			text:
-				"Muda a aparência dos callouts (aquelas caixas coloridas com > [!nota]). O estilo " +
-				"global vale para todos; abaixo dele dá para ajustar tipos específicos.",
-		});
-
 		new Setting(containerEl)
 			.setName("Personalizar callouts")
 			.setDesc("Desligue para voltar à aparência padrão do Obsidian, sem perder as configurações.")
@@ -122,18 +125,35 @@ export class SecaoCallouts {
 		// com ele. Sem isto, `atualizarPrevias()` mexeria em elementos fora do DOM.
 		this.previas = [];
 
-		this.tituloLivre(containerEl);
-		this.estiloCoringa(containerEl);
-		this.estiloGlobal(containerEl);
+		this.subSecao(containerEl, "titulo-livre", "Nome livre no callout", (corpo) =>
+			this.tituloLivre(corpo),
+		);
+		this.subSecao(containerEl, "coringa", "Estilo Padrão", (corpo) => this.estiloCoringa(corpo));
+		this.subSecao(containerEl, "global", "Estilo de todos os callouts", (corpo) =>
+			this.estiloGlobal(corpo),
+		);
 		this.listaDeTipos(containerEl);
 		this.importacao(containerEl);
+	}
+
+	/** Um acordeão aninhado das sub-seções de callout, para não repetir as opções em cada uma. */
+	private subSecao(
+		containerEl: HTMLElement,
+		chave: string,
+		titulo: string,
+		desenhar: (corpo: HTMLElement) => void,
+	): void {
+		const acordeao = criarAcordeao(containerEl, {
+			chave: `customize:callouts:${chave}`,
+			titulo,
+			aninhado: true,
+		});
+		acordeao.sePreenchido(desenhar);
 	}
 
 	// ── Título livre e estilo "Padrão" ─────────────────────────────────────────────────────
 
 	private tituloLivre(containerEl: HTMLElement): void {
-		new Setting(containerEl).setHeading().setName("Nome livre no callout");
-
 		const exemplo = containerEl.createDiv({ cls: "customize-explicacao" });
 		exemplo.createEl("p", {
 			text:
@@ -160,10 +180,8 @@ export class SecaoCallouts {
 	}
 
 	private estiloCoringa(containerEl: HTMLElement): void {
-		new Setting(containerEl).setHeading().setName("Estilo Padrão");
-
 		containerEl.createEl("p", {
-			cls: "setting-item-description",
+			cls: "customize-config-nota",
 			text:
 				"Vale para qualquer nome que você inventar e que não tenha estilo próprio — " +
 				"inclusive um callout escrito direto, como > [!Anotação rápida]. Sem isto, o " +
@@ -222,8 +240,6 @@ export class SecaoCallouts {
 	// ── Estilo global ──────────────────────────────────────────────────────────────────────
 
 	private estiloGlobal(containerEl: HTMLElement): void {
-		new Setting(containerEl).setHeading().setName("Estilo de todos os callouts");
-
 		const g = this.dados.global;
 		const salvar = (): Promise<void> => this.salvar();
 
@@ -324,25 +340,33 @@ export class SecaoCallouts {
 	// ── Tipos com ajustes próprios ─────────────────────────────────────────────────────────
 
 	private listaDeTipos(containerEl: HTMLElement): void {
-		new Setting(containerEl)
-			.setHeading()
-			.setName("Estilos nomeados")
-			.addButton((b) =>
-				b
-					.setButtonText("Novo estilo")
-					.setCta()
-					.onClick(() => this.adicionarTipo()),
-			);
-
-		containerEl.createEl("p", {
-			cls: "setting-item-description",
-			text: "Cada estilo tem um identificador que você usa no markdown, com cor e ícone próprios.",
+		const total = this.dados.personalizados.length;
+		const acordeao = criarAcordeao(containerEl, {
+			chave: CHAVE_NOMEADOS,
+			titulo: "Estilos nomeados",
+			descricao: "Cada estilo tem um identificador que você usa no markdown, com cor e ícone próprios.",
+			resumo: `${total} ${total === 1 ? "estilo" : "estilos"}`,
+			aninhado: true,
 		});
 
+		// Dentro de `-acoes`: o acordeão ignora cliques aqui, então criar um estilo não fecha a
+		// seção onde o editor dele vai abrir.
+		const acoes = acordeao.cabecalho.createDiv({ cls: "customize-acordeao-acoes" });
+		new Setting(acoes).addButton((b) =>
+			b
+				.setButtonText("Novo estilo")
+				.setCta()
+				.onClick(() => this.adicionarTipo()),
+		);
+
+		acordeao.sePreenchido((corpo) => this.desenharTipos(corpo));
+	}
+
+	private desenharTipos(containerEl: HTMLElement): void {
 		if (this.dados.personalizados.length === 0) {
-			containerEl.createEl("p", {
-				cls: "setting-item-description",
-				text: "Nenhum estilo nomeado ainda. Todos os callouts usam o estilo Padrão acima.",
+			containerEl.createDiv({
+				cls: "customize-config-vazio",
+				text: "Nenhum estilo nomeado ainda. Todos os callouts usam o estilo Padrão.",
 			});
 			return;
 		}
@@ -397,6 +421,9 @@ export class SecaoCallouts {
 
 		this.dados.personalizados.push({ tipo: sugestao, estilo: {} });
 		this.editando = sugestao;
+		// O estilo novo nasce com o editor aberto; a seção que o contém precisa estar aberta
+		// junto, senão o botão parece não ter feito nada.
+		abrirAcordeao(CHAVE_NOMEADOS);
 		await this.salvar();
 		this.redesenhar();
 	}
@@ -464,7 +491,7 @@ export class SecaoCallouts {
 		this.controleTamanhoIcone(editor, p.estilo, "Vazio = usa o tamanho global.", true, salvar);
 
 		editor.createEl("p", {
-			cls: "setting-item-description",
+			cls: "customize-config-nota",
 			text: "Ajustes abaixo sobrescrevem o estilo global só neste tipo. Vazio = usa o global.",
 		});
 
@@ -513,10 +540,22 @@ export class SecaoCallouts {
 	private importacao(containerEl: HTMLElement): void {
 		if (!this.calloutManagerPresente) return;
 
-		new Setting(containerEl).setHeading().setName("Importar do Callout Manager");
+		// Acordeão aninhado como as demais, mas ABERTO por padrão: só aparece quando o Callout
+		// Manager está instalado, e é um aviso com prazo — se ela desinstalar o outro plugin
+		// antes de importar, as cores e ícones se perdem. Escondido não cumpriria esse papel.
+		const acordeao = criarAcordeao(containerEl, {
+			chave: "customize:callouts:importar",
+			titulo: "Importar do Callout Manager",
+			aninhado: true,
+			abertoPorPadrao: true,
+		});
 
+		acordeao.sePreenchido((corpo) => this.desenharImportacao(corpo));
+	}
+
+	private desenharImportacao(containerEl: HTMLElement): void {
 		containerEl.createEl("p", {
-			cls: "setting-item-description",
+			cls: "customize-config-nota",
 			text:
 				"Encontrei callouts configurados no plugin Callout Manager. Importe antes de " +
 				"desinstalá-lo, senão as cores e ícones se perdem. Tipos que já existirem aqui " +
