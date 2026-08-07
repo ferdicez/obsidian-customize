@@ -485,3 +485,222 @@ forma global: ao desativar o plugin, nada deve sobrar visualmente.
 	border-top: none;
 	padding-top: 0;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════
+   ABAS NAS BASES
+
+   Veio do plugin Base Tabs, absorvido na 0.5.0. As classes mantêm o prefixo `base-tabs-`:
+   são as mesmas que o código de `src/abas/` escreve no DOM das Bases, e renomear os dois
+   lados de uma vez seria muita superfície de erro para um ganho só cosmético.
+
+   Diferente do resto deste arquivo, a maior parte daqui NÃO é escopada em `.customize-config`
+   — são as abas dentro das Bases, que vivem no editor e não no painel de configurações.
+   ════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Base Tabs — abas horizontais para as views de uma Base (estilo Notion).
+   Usa variáveis do tema do Obsidian para respeitar o tema ativo (Minimal, etc.). */
+
+/* Barra de abas injetada no início da toolbar da Base.
+   Linha única; se as abas não couberem, transbordam com rolagem lateral discreta (sem medição
+   em JS — medir em bases grandes travava o app). */
+.base-tabs-barra {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1, 4px);
+	flex-wrap: nowrap;
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: auto;
+	scrollbar-width: none; /* Firefox: sem barra de rolagem visível */
+}
+.base-tabs-barra::-webkit-scrollbar {
+	display: none; /* Chromium: idem */
+}
+.base-tabs-aba {
+	flex: 0 0 auto; /* abas não encolhem nem quebram */
+}
+
+/* Cada aba: ícone + nome, estilo "botão" — fundo clarinho próprio (cor do hover do tema),
+   cantos arredondados por inteiro; a ativa ganha sublinhado no accent. */
+.base-tabs-aba {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1, 4px);
+	padding: var(--size-4-1, 4px) var(--size-4-2, 8px);
+	/* Fundo de cada aba: clarinho sutil do tema (cinza translúcido do hover), que acompanha o vault.
+	   Borda fininha ao redor (topo/laterais) + borda de baixo de 2px transparente (vira o
+	   sublinhado accent na ativa). !important/box-shadow zerado porque temas como o Minimal
+	   estilizam <button> com fundo branco + sombra no hover, que venceria o nosso estilo. */
+	background-color: var(--background-modifier-hover) !important;
+	border: 1px solid var(--background-modifier-border) !important;
+	border-bottom: 2px solid transparent !important;
+	border-radius: var(--radius-s, 6px);
+	box-shadow: none !important;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.2;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.base-tabs-aba:hover {
+	background-color: var(--background-modifier-active-hover, var(--background-modifier-hover)) !important;
+	color: var(--text-normal);
+	box-shadow: none !important;
+	border-color: var(--background-modifier-border-hover, var(--background-modifier-border)) !important;
+	border-bottom-color: transparent !important;
+}
+
+.base-tabs-aba.is-active {
+	color: var(--text-normal);
+	border-bottom-color: var(--interactive-accent) !important;
+	font-weight: var(--font-medium, 500);
+}
+
+.base-tabs-aba-icone {
+	display: inline-flex;
+	align-items: center;
+	color: currentColor;
+}
+
+.base-tabs-aba-icone .svg-icon {
+	width: var(--icon-s, 16px);
+	height: var(--icon-s, 16px);
+}
+
+.base-tabs-aba-nome {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Quando as abas estão ativas, esconde o seletor (dropdown) de views nativo.
+   Não usamos display:none — o seletor ainda precisa ser acionável programaticamente
+   ao trocar de view. Tiramos ele do fluxo visual mantendo-o "clicável" fora da tela. */
+.bases-toolbar.base-tabs-ativo > .bases-toolbar-views-menu {
+	position: absolute;
+	left: -9999px;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	opacity: 0;
+	/* SEM pointer-events:none — o seletor precisa continuar acionável por código (trocarPara). */
+}
+
+/* Seletor de ícone (FuzzySuggestModal): nome à esquerda, ícone à direita. */
+.base-tabs-icon-suggestion {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.base-tabs-icon-suggestion svg {
+	display: block;
+	color: var(--text-muted);
+}
+
+.base-tabs-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+.base-tabs-config-code {
+	background: var(--background-secondary);
+	border-radius: var(--radius-s, 6px);
+	padding: var(--size-4-2, 8px) var(--size-4-3, 12px);
+	overflow-x: auto;
+	margin: var(--size-4-2, 8px) 0;
+}
+.base-tabs-config-code code {
+	white-space: pre;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+}
+.base-tabs-tutorial-copy {
+	margin-bottom: var(--size-4-3, 12px);
+}
+.base-tabs-tutorial-dicas {
+	margin: var(--size-4-2, 8px) 0 var(--size-4-4, 16px);
+	padding-left: var(--size-4-4, 16px);
+}
+.base-tabs-tutorial-dicas li {
+	margin-bottom: var(--size-4-1, 4px);
+}
+
+/* Fase 2: embed curado (bloco ```base-tabs numa nota). */
+.base-tabs-embed-curado {
+	width: 100%;
+}
+
+/* Em QUALQUER embed (nativo ![[...]] ou curado), a toolbar serve só pra visualizar: escondemos os
+   botões de configuração (ordenar, filtro, propriedades, contador, novo). A config fica na base
+   original. Mantemos só o "Localizar" (busca dentro da base) + as nossas abas.
+   O alvo é a toolbar marcada com .base-tabs-em-embed (embeds nativos) ou dentro de .base-tabs-embed-curado. */
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-sort-menu,
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-filter-menu,
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-properties-menu,
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-results-menu,
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-new-item-menu {
+	display: none;
+}
+
+/* "Localizar" vai pra extremidade direita e mostra só o ícone (sem a palavra). */
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-search {
+	margin-left: auto;
+}
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-search .text-button-label,
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-search .text-icon-button > span:not(.text-button-icon) {
+	display: none;
+}
+.bases-toolbar.base-tabs-em-embed .bases-toolbar-search .text-button-icon {
+	display: inline-flex;
+}
+.base-tabs-erro {
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+	padding: var(--size-4-2, 8px);
+}
+
+/* `abas: não` no bloco — esconde a toolbar/cabeçalho inteiro do embed, mostrando só o conteúdo. */
+.base-tabs-sem-barra .bases-toolbar,
+.base-tabs-sem-barra .bases-header {
+	display: none;
+}
+
+/* Bloco de código copiável do tutorial de embed, na seção "Abas nas Bases" do painel. */
+.customize-config .base-tabs-config-code {
+	background: var(--background-secondary);
+	border-radius: var(--radius-s, 6px);
+	padding: var(--size-4-2, 8px) var(--size-4-3, 12px);
+	overflow-x: auto;
+	margin: var(--size-4-2, 8px) 0;
+}
+
+.customize-config .base-tabs-config-code code {
+	white-space: pre;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+}
+
+.customize-config .base-tabs-tutorial-copy {
+	margin-bottom: var(--size-4-3, 12px);
+}
+
+.customize-config .base-tabs-tutorial-dicas {
+	margin: var(--size-4-2, 8px) 0 var(--size-4-4, 16px);
+	padding-left: var(--size-4-4, 16px);
+}
+
+.customize-config .base-tabs-tutorial-dicas li {
+	margin-bottom: var(--size-4-1, 4px);
+}
+
+/* Preview do ícone na lista de "Ícones por view". A `.customize-config-preview` do painel é
+   uma grade de amostras de cor da paleta — outra coisa; por isso esta continua separada. */
+.customize-config .base-tabs-config-preview {
+	display: inline-flex;
+	align-items: center;
+	margin-right: var(--size-4-2, 8px);
+	color: var(--text-normal);
+}

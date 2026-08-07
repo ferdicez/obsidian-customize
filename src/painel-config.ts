@@ -1,5 +1,6 @@
-﻿import { App, PluginSettingTab, Setting, setIcon } from "obsidian";
+﻿import { App, PluginSettingTab, Setting, requireApiVersion, setIcon } from "obsidian";
 import { abrirAcordeao, criarAcordeao } from "./acordeao";
+import { SecaoAbas } from "./config-abas";
 import { SecaoCallouts } from "./config-callouts";
 import { normalizarHex, precisaBorda } from "./cores";
 import { criarPaleta, moverCor, paletaAtiva, removerPaleta, type Paleta } from "./dados";
@@ -30,12 +31,14 @@ export class PainelConfigCustomize extends PluginSettingTab {
 	/** Paleta com o editor de cores aberto (null = nenhuma). Estado só de UI, não persiste. */
 	private editando: string | null = null;
 	private secaoCallouts: SecaoCallouts;
+	private secaoAbas: SecaoAbas;
 	/** Evita repetir a checagem de disco (e o redesenho) a cada `display()`. */
 	private checouCalloutManager = false;
 
 	constructor(app: App, private plugin: CustomizePlugin) {
 		super(app, plugin);
 		this.secaoCallouts = new SecaoCallouts(plugin, () => this.display());
+		this.secaoAbas = new SecaoAbas(plugin, () => this.display());
 	}
 
 	display(): void {
@@ -61,6 +64,7 @@ export class PainelConfigCustomize extends PluginSettingTab {
 		this.blocoPaletas(containerEl);
 		this.blocoSeletorNativo(containerEl);
 		this.blocoCallouts(containerEl);
+		this.blocoAbas(containerEl);
 
 		// A checagem de "o Callout Manager está instalado?" toca o disco. Fazemos fora do
 		// caminho de desenho e redesenhamos só se o resultado mudar algo — assim o render
@@ -446,5 +450,31 @@ export class PainelConfigCustomize extends PluginSettingTab {
 		});
 
 		acordeao.sePreenchido((corpo) => this.secaoCallouts.render(corpo));
+	}
+
+	/**
+	 * Abas nas Bases — a funcionalidade que veio do plugin Base Tabs na 0.5.0. Acordeão próprio e
+	 * fechado por padrão: depois de escolher os ícones, ela quase não volta aqui.
+	 *
+	 * A seção inteira some em Obsidian sem Bases (< 1.10.0), porque ali não há o que configurar —
+	 * é o mesmo motivo de o `minAppVersion` do plugin não ter subido para 1.10.0.
+	 */
+	private blocoAbas(containerEl: HTMLElement): void {
+		if (!requireApiVersion("1.10.0")) return;
+
+		const total = Object.keys(this.plugin.dados.abas.iconesPorView).length;
+		const acordeao = criarAcordeao(containerEl, {
+			chave: "customize:abas",
+			titulo: "Abas nas Bases",
+			descricao:
+				"Mostra as views de uma Base como abas lado a lado com ícones, no lugar do menu " +
+				"suspenso. Clique com o botão direito numa aba para escolher o ícone e o modo de " +
+				"exibição (ícone e nome / só ícone / só nome).",
+			resumo: this.plugin.dados.abas.ativo
+				? `${total} ${total === 1 ? "ícone" : "ícones"}`
+				: "Desligado",
+		});
+
+		acordeao.sePreenchido((corpo) => this.secaoAbas.render(corpo));
 	}
 }

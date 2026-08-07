@@ -1,4 +1,5 @@
 ﻿import type { Plugin } from "obsidian";
+import { ABAS_PADRAO, type DadosAbas } from "./abas/dados";
 import { CALLOUTS_PADRAO, type DadosCallouts } from "./callouts";
 
 /**
@@ -30,6 +31,8 @@ export interface DadosCustomize {
 	permitirCorPersonalizada: boolean;
 	/** Customização visual dos callouts. */
 	callouts: DadosCallouts;
+	/** Abas nas Bases (ícones por view e modo de exibição). Veio do plugin Base Tabs. */
+	abas: DadosAbas;
 }
 
 export const PALETA_PADRAO_ID = "padrao";
@@ -52,6 +55,7 @@ export const DADOS_PADRAO: DadosCustomize = {
 	seletoresIgnorados: [],
 	permitirCorPersonalizada: true,
 	callouts: CALLOUTS_PADRAO,
+	abas: ABAS_PADRAO,
 };
 
 /** Devolvida quando não há paleta nenhuma. Congelada: ninguém escreve nela por acidente. */
@@ -83,6 +87,15 @@ export async function carregarDados(plugin: Plugin): Promise<DadosCustomize> {
 		},
 	};
 	if (!Array.isArray(dados.callouts.personalizados)) dados.callouts.personalizados = [];
+
+	// `abas` é aninhado, e o Object.assign acima é raso: precisa do seu próprio merge, senão um
+	// data.json salvo antes desta funcionalidade viria sem `ativo`/`iconesPorView`.
+	dados.abas = {
+		...ABAS_PADRAO,
+		...(dados.abas ?? {}),
+		iconesPorView: { ...(dados.abas?.iconesPorView ?? {}) },
+		exibicaoPorView: { ...(dados.abas?.exibicaoPorView ?? {}) },
+	};
 
 	return dados;
 }
