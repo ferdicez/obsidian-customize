@@ -9,6 +9,8 @@ import { InterceptadorDeCor } from "./interceptador-de-cor";
 import { ModalEscolherIcone } from "./modal-escolher-icone";
 import { PainelConfigCustomize } from "./painel-config";
 import { PopoverPaleta } from "./popover-paleta";
+import { BotaoPropriedades } from "./botao-propriedades";
+import { gerarCssPropriedades } from "./propriedades";
 import { processarTitulos } from "./titulo-callout";
 
 /** Linguagem do bloco de código do embed curado de Base (veio do plugin Base Tabs). */
@@ -40,6 +42,12 @@ export default class CustomizePlugin extends Plugin {
 	private popover!: PopoverPaleta;
 	private interceptador!: InterceptadorDeCor;
 	private estilosCallouts!: EstilosDinamicos;
+	/**
+	 * `<style>` separado do de callouts de propósito: são funcionalidades independentes, e um erro
+	 * na geração de uma não pode invalidar a folha da outra.
+	 */
+	private estilosPropriedades!: EstilosDinamicos;
+	private botaoPropriedades!: BotaoPropriedades;
 	gerenciadorAbas: GerenciadorDeAbas | null = null;
 	/** Ouvintes para forçar re-render das abas (ex.: após trocar um ícone) — inclui embeds curados. */
 	private ouvintesReescan = new Set<() => void>();
@@ -66,7 +74,14 @@ export default class CustomizePlugin extends Plugin {
 
 		// Trocar de tema ou recarregar snippets reordena os <style> do head; reaplicamos para
 		// continuar depois deles na cascata.
-		this.registerEvent(this.app.workspace.on("css-change", () => this.aplicarEstilos()));
+		this.registerEvent(
+			this.app.workspace.on("css-change", () => {
+				this.aplicarEstilos();
+				// A folha de propriedades também precisa voltar ao fim do head: o tema Minimal
+				// estiliza `.metadata-property`, e quem vem depois ganha o empate.
+				this.estilosPropriedades?.aplicar(gerarCssPropriedades(this.dados.propriedades));
+			}),
+		);
 
 		// Sem hotkey padrão de propósito: qualquer combinação que eu escolhesse teria chance de
 		// colidir com um atalho do Obsidian ou de outro plugin. A usuária define o dela em
@@ -77,6 +92,7 @@ export default class CustomizePlugin extends Plugin {
 			callback: () => this.alternarPaleta(),
 		});
 
+		this.iniciarPropriedades();
 		this.iniciarAbas();
 		this.registrarBlocoDeBase();
 
@@ -87,12 +103,59 @@ export default class CustomizePlugin extends Plugin {
 		// Os listeners de document saem sozinhos via registerDomEvent; o popover é nosso.
 		this.popover?.destruir();
 		this.pararAbas();
+		// Os olhinhos e a classe do body são DOM fora do nosso container — não saem sozinhos com o
+		// plugin, e uma classe órfã no body deixaria as propriedades reveladas para sempre.
+		this.botaoPropriedades?.limpar();
 		this.ouvintesReescan.clear();
 	}
 
 	async salvar(): Promise<void> {
 		await salvarDados(this, this.dados);
 		this.aplicarEstilos();
+	}
+
+	// ── Propriedades da nota ─────────────────────────────────────────────────────────────────
+
+	/**
+	 * Liga o esconde-propriedades e o layout em colunas.
+	 *
+	 * Quem esconde é CSS (ver `propriedades.ts`); daqui sai só o `<style>` e o olhinho. Por isso
+	 * não há observador de DOM: a varredura acontece nos eventos de workspace, que disparam nas
+	 * trocas de nota e ficam quietos enquanto ela digita no frontmatter.
+	 */
+	private iniciarPropriedades(): void {
+		this.estilosPropriedades = new EstilosDinamicos(this, "propriedades");
+		this.estilosPropriedades.iniciar();
+
+		this.botaoPropriedades = new BotaoPropriedades(
+			this.app,
+			() => this.dados.propriedades,
+			async (revelado) => {
+				this.dados.propriedades.revelado = revelado;
+				// salvarDados direto, não `salvar()`: alternar o olhinho não precisa regerar CSS
+				// nenhum (quem esconde é a classe do body), e regerar a cada clique faria o
+				// navegador recalcular o estilo do vault inteiro à toa.
+				await salvarDados(this, this.dados);
+			},
+		);
+
+		const varrer = (): void => this.botaoPropriedades.varrer();
+		this.app.workspace.onLayoutReady(() => {
+			this.atualizarPropriedades();
+		});
+		this.registerEvent(this.app.workspace.on("layout-change", varrer));
+		this.registerEvent(this.app.workspace.on("active-leaf-change", varrer));
+		this.registerEvent(this.app.workspace.on("file-open", varrer));
+	}
+
+	/**
+	 * Reaplica tudo de propriedades a partir do estado atual: o CSS, a classe do body e os
+	 * olhinhos. É o que o painel de configurações chama a cada mudança.
+	 */
+	atualizarPropriedades(): void {
+		this.estilosPropriedades?.aplicar(gerarCssPropriedades(this.dados.propriedades));
+		this.botaoPropriedades?.sincronizarBody();
+		this.botaoPropriedades?.varrer();
 	}
 
 	// ── Abas nas Bases ───────────────────────────────────────────────────────────────────────

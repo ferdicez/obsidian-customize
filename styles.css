@@ -704,3 +704,105 @@ forma global: ao desativar o plugin, nada deve sobrar visualmente.
 	margin-right: var(--size-4-2, 8px);
 	color: var(--text-normal);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+   PROPRIEDADES DA NOTA
+
+   Duas zonas bem diferentes, na ordem: primeiro o olhinho, que vive no bloco de propriedades de
+   TODA nota (fora do painel, logo sem o escopo `.customize-config`); depois os controles do
+   painel, escopados como manda a regra 1 de `_docs/painel-de-configuracoes.md`.
+
+   O que esconde as propriedades e monta as colunas NÃO está aqui — é gerado em runtime por
+   `propriedades.ts`, porque depende do que ela cadastrou. Aqui fica só o que é fixo.
+   ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* O olhinho no cabeçalho "Propriedades". Discreto por padrão: ele fica visível em cima de toda
+   nota do vault, e um botão de destaque ali competiria com o conteúdo dela. */
+.customize-props-olho {
+	color: var(--text-faint);
+	flex-shrink: 0;
+}
+
+.customize-props-olho:hover {
+	color: var(--text-normal);
+}
+
+/* Revelado: o olho fica na cor de destaque. É o sinal de que a nota está mostrando MAIS do que
+   o normal — sem isso, ela veria as propriedades todas e não saberia que basta clicar para
+   voltar ao estado enxuto. */
+.customize-props-olho.is-ativo {
+	color: var(--text-accent);
+}
+
+/* Quando o tema esconde o cabeçalho "Propriedades" (o Minimal faz isso via `.metadata-heading-off`),
+   o botão é filho direto do container e precisa se posicionar sozinho no canto superior direito —
+   senão ele entraria no fluxo, empurrando a primeira propriedade para baixo. */
+.metadata-container:has(.customize-props-olho-solto) {
+	position: relative;
+}
+
+.customize-props-olho-solto {
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 1;
+}
+
+/* ── Painel: a lista de propriedades ocultas ─────────────────────────────────────────────── */
+
+.customize-config .customize-props-lista {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1, 2px);
+	margin: var(--size-4-2, 8px) 0;
+}
+
+.customize-config .customize-props-item {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2, 8px);
+	padding: var(--size-2-2, 4px) var(--size-4-2, 8px);
+	background: var(--background-secondary);
+	border-radius: var(--radius-s, 6px);
+}
+
+/* A chave sai em monoespaçada porque é um valor literal do frontmatter — a fonte deixa claro
+   que "created" ali é o nome exato, não um rótulo que ela pode reescrever como quiser. */
+.customize-config .customize-props-nome {
+	flex: 1;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+}
+
+/* ── Painel: os chips de sugestão ────────────────────────────────────────────────────────── */
+
+/* O título da lista de sugestões não precisa da linha divisória: ele e a grade de chips logo
+   abaixo são um bloco só, e o traço entre os dois os separaria visualmente sem motivo. */
+.customize-config .customize-props-sugestoes-titulo {
+	border-bottom: none;
+	padding-bottom: 0;
+}
+
+.customize-config .customize-props-sugestoes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2, 4px);
+	margin-bottom: var(--size-4-4, 16px);
+}
+
+.customize-config .customize-props-chip {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	padding: var(--size-2-1, 2px) var(--size-4-2, 8px);
+	height: auto;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	border-radius: var(--radius-s, 6px);
+	cursor: pointer;
+}
+
+.customize-config .customize-props-chip:hover {
+	background: var(--background-modifier-active-hover);
+	color: var(--text-normal);
+}

@@ -2,6 +2,7 @@
 import { abrirAcordeao, criarAcordeao } from "./acordeao";
 import { SecaoAbas } from "./config-abas";
 import { SecaoCallouts } from "./config-callouts";
+import { SecaoPropriedades } from "./config-propriedades";
 import { normalizarHex, precisaBorda } from "./cores";
 import { criarPaleta, moverCor, paletaAtiva, removerPaleta, type Paleta } from "./dados";
 import { CLASSE_IGNORAR } from "./interceptador-de-cor";
@@ -32,6 +33,7 @@ export class PainelConfigCustomize extends PluginSettingTab {
 	private editando: string | null = null;
 	private secaoCallouts: SecaoCallouts;
 	private secaoAbas: SecaoAbas;
+	private secaoPropriedades: SecaoPropriedades;
 	/** Evita repetir a checagem de disco (e o redesenho) a cada `display()`. */
 	private checouCalloutManager = false;
 
@@ -39,6 +41,7 @@ export class PainelConfigCustomize extends PluginSettingTab {
 		super(app, plugin);
 		this.secaoCallouts = new SecaoCallouts(plugin, () => this.display());
 		this.secaoAbas = new SecaoAbas(plugin, () => this.display());
+		this.secaoPropriedades = new SecaoPropriedades(plugin, () => this.display());
 	}
 
 	display(): void {
@@ -64,6 +67,7 @@ export class PainelConfigCustomize extends PluginSettingTab {
 		this.blocoPaletas(containerEl);
 		this.blocoSeletorNativo(containerEl);
 		this.blocoCallouts(containerEl);
+		this.blocoPropriedades(containerEl);
 		this.blocoAbas(containerEl);
 
 		// A checagem de "o Callout Manager está instalado?" toca o disco. Fazemos fora do
@@ -450,6 +454,27 @@ export class PainelConfigCustomize extends PluginSettingTab {
 		});
 
 		acordeao.sePreenchido((corpo) => this.secaoCallouts.render(corpo));
+	}
+
+	/**
+	 * Propriedades da nota. Acordeão próprio e fechado por padrão: depois de escolher o que
+	 * esconder, ela quase não volta aqui — o uso do dia a dia é o olhinho na própria nota.
+	 */
+	private blocoPropriedades(containerEl: HTMLElement): void {
+		const dados = this.plugin.dados.propriedades;
+		const total = dados.ocultas.length;
+		const acordeao = criarAcordeao(containerEl, {
+			chave: "customize:propriedades",
+			titulo: "Propriedades da nota",
+			descricao:
+				"Esconde as propriedades que só ocupam espaço no topo da nota, atrás de um olhinho " +
+				"que mostra todas quando você precisar. Também distribui as propriedades em duas colunas.",
+			resumo: dados.ativo
+				? `${total} ${total === 1 ? "oculta" : "ocultas"}`
+				: "Desligado",
+		});
+
+		acordeao.sePreenchido((corpo) => this.secaoPropriedades.render(corpo));
 	}
 
 	/**

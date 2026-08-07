@@ -1,6 +1,7 @@
 ﻿import type { Plugin } from "obsidian";
 import { ABAS_PADRAO, type DadosAbas } from "./abas/dados";
 import { CALLOUTS_PADRAO, type DadosCallouts } from "./callouts";
+import { PROPRIEDADES_PADRAO, type DadosPropriedades } from "./propriedades";
 
 /**
  * Dados persistidos do plugin (data.json). Guarda as paletas de cores da usuária e qual está ativa.
@@ -33,6 +34,8 @@ export interface DadosCustomize {
 	callouts: DadosCallouts;
 	/** Abas nas Bases (ícones por view e modo de exibição). Veio do plugin Base Tabs. */
 	abas: DadosAbas;
+	/** Propriedades da nota: quais ficam escondidas atrás do olhinho, e o layout em colunas. */
+	propriedades: DadosPropriedades;
 }
 
 export const PALETA_PADRAO_ID = "padrao";
@@ -56,6 +59,7 @@ export const DADOS_PADRAO: DadosCustomize = {
 	permitirCorPersonalizada: true,
 	callouts: CALLOUTS_PADRAO,
 	abas: ABAS_PADRAO,
+	propriedades: PROPRIEDADES_PADRAO,
 };
 
 /** Devolvida quando não há paleta nenhuma. Congelada: ninguém escreve nela por acidente. */
@@ -96,6 +100,18 @@ export async function carregarDados(plugin: Plugin): Promise<DadosCustomize> {
 		iconesPorView: { ...(dados.abas?.iconesPorView ?? {}) },
 		exibicaoPorView: { ...(dados.abas?.exibicaoPorView ?? {}) },
 	};
+
+	// `propriedades` é aninhado — mesmo motivo de `callouts` e `abas`: o Object.assign lá em cima
+	// é raso, então um data.json salvo antes desta funcionalidade viria sem os campos novos.
+	dados.propriedades = {
+		...PROPRIEDADES_PADRAO,
+		...(dados.propriedades ?? {}),
+	};
+	// A lista alimenta um seletor CSS; um valor torto aqui (data.json editado à mão) derrubaria a
+	// folha inteira, levando junto os callouts. Filtra antes de chegar lá.
+	dados.propriedades.ocultas = Array.isArray(dados.propriedades.ocultas)
+		? dados.propriedades.ocultas.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+		: [];
 
 	return dados;
 }
