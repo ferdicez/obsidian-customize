@@ -467,8 +467,9 @@ export class PainelConfigCustomize extends PluginSettingTab {
 			chave: "customize:propriedades",
 			titulo: "Propriedades da nota",
 			descricao:
-				"Esconde as propriedades que só ocupam espaço no topo da nota, atrás de um olhinho " +
-				"que mostra todas quando você precisar. Também distribui as propriedades em duas colunas.",
+				"Esconde as propriedades que só ocupam espaço no topo da nota, atrás de um olhinho na " +
+				"barra da aba que mostra todas quando você precisar. Também distribui as propriedades " +
+				"em duas colunas.",
 			resumo: dados.ativo
 				? `${total} ${total === 1 ? "oculta" : "ocultas"}`
 				: "Desligado",

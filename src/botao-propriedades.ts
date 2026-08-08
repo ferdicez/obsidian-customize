@@ -1,37 +1,47 @@
-import { setIcon, type App } from "obsidian";
+import { MarkdownView, setIcon, type App } from "obsidian";
 import { CLASSE_REVELADO, normalizarChave, type DadosPropriedades } from "./propriedades";
 
 /**
  * O olhinho que revela as propriedades escondidas.
  *
- * ## Onde ele mora, e por que não num MutationObserver
+ * ## Onde ele mora, e por quê
  *
- * O botão é inserido no `.metadata-properties-heading` de cada `.metadata-container` visível. Esse
- * bloco é recriado pelo Obsidian a cada troca de nota, então algo precisa reinserir o botão.
+ * Na **barra de ações da aba** — a fileira de ícones no canto superior direito, ao lado do livro
+ * (modo de leitura) e do menu `⋮`. Escolha dela, depois de ver a primeira versão dentro do bloco
+ * de propriedades: *"eu achei que ficou ruim do jeito que tá… do lado do livro"*.
  *
- * A escolha aqui é **varrer nos eventos do workspace** (`layout-change`, `active-leaf-change`,
- * `file-open`) em vez de observar mutações do DOM. É o mesmo padrão que o `gerenciador-de-abas.ts`
- * usa para as Bases, e a razão é a registrada no doc do plugin: um observador disparando a cada
- * tecla digitada no frontmatter já travou o Obsidian antes. Os eventos do workspace disparam nas
- * transições que importam e ficam quietos enquanto ela digita.
+ * É o lugar certo por dois motivos, além da preferência dela: não rouba espaço do topo da nota, e
+ * fica junto dos outros controles que **mudam como a nota é exibida** — que é exatamente o que ele
+ * faz. Dentro do bloco, o olhinho competia com o conteúdo que ele deveria estar limpando.
  *
- * ## ARMADILHA — o botão não pode entrar duas vezes
+ * ## A API faz o trabalho pesado
  *
- * `varrer()` roda várias vezes para o mesmo container (os três eventos podem disparar em sequência
- * numa única troca de nota). Por isso a marca `data-customize-olho` no container: já tem botão,
- * pula. Sem isso, uma nota aberta e fechada algumas vezes acumularia olhinhos lado a lado.
+ * `view.addAction()` é a via oficial: o Obsidian posiciona, estiliza e **remove o ícone junto com a
+ * view**. A versão anterior deste arquivo inseria `<button>` à mão no `.metadata-properties-heading`
+ * e por isso precisava de marca anti-duplicata, remoção manual e reposicionamento quando o tema
+ * escondia o cabeçalho. Nada disso existe mais.
+ *
+ * O que sobra para nós é só: dar o ícone a cada view que ainda não tem, e manter todos os ícones
+ * (várias notas abertas em split) desenhando o mesmo estado.
  *
  * ## O estado é do body, não do botão
  *
- * Quem esconde é o CSS, através da classe no `<body>` (ver `propriedades.ts`). O botão só alterna
- * essa classe e persiste a escolha. Assim os olhinhos de todas as notas abertas em split
- * concordam entre si de graça — não há estado espalhado para sincronizar.
+ * Quem esconde é o CSS, pela classe no `<body>` (ver `propriedades.ts`). O botão só alterna essa
+ * classe e persiste a escolha — então dois splits concordam de graça, sem estado espalhado.
  */
 
-const MARCA = "data-customize-olho";
+/** Marca a view que já ganhou o ícone, para não empilhar um por re-render. */
+const MARCA = "customize-olho";
 const CLASSE_BOTAO = "customize-props-olho";
 
 export class BotaoPropriedades {
+	/**
+	 * Os ícones vivos, para repintar todos quando o estado muda. É um Set de elementos, e não uma
+	 * lista de views, porque `addAction` devolve o próprio elemento — e um elemento que saiu do DOM
+	 * (aba fechada) é detectado por `isConnected`, sem precisar de desregistro.
+	 */
+	private icones = new Set<HTMLElement>();
+
 	constructor(
 		private app: App,
 		private getDados: () => DadosPropriedades,
@@ -44,91 +54,90 @@ export class BotaoPropriedades {
 	 */
 	sincronizarBody(): void {
 		const dados = this.getDados();
-		const revelado = dados.ativo && dados.revelado;
-		document.body.toggleClass(CLASSE_REVELADO, revelado);
+		document.body.toggleClass(CLASSE_REVELADO, dados.ativo && dados.revelado);
 	}
 
-	/** Insere o botão onde falta e remove onde não deve mais existir. */
+	/** Dá o ícone às views que ainda não têm, e tira de todas se a funcionalidade não se aplica. */
 	varrer(): void {
-		const dados = this.getDados();
-		const containers = document.querySelectorAll<HTMLElement>(".metadata-container");
+		this.limparOrfaos();
 
-		containers.forEach((container) => {
-			// Sem nada escondido, o olhinho não teria o que revelar — seria um botão morto no
-			// cabeçalho de toda nota do vault.
-			if (!dados.ativo || this.temOcultas(dados) === false) {
-				this.removerDe(container);
-				return;
-			}
-			this.inserirEm(container);
+		if (!this.deveAparecer()) {
+			this.removerIcones();
+			return;
+		}
+
+		this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+			const view = leaf.view;
+			if (!(view instanceof MarkdownView)) return;
+			this.darIconeA(view);
 		});
+
+		this.pintarTodos();
 	}
 
-	/** Tira todos os botões e a classe do body. Usado no `onunload` e ao desligar a funcionalidade. */
+	/** Tira os ícones e a classe do body. Usado no `onunload`. */
 	limpar(): void {
 		document.body.removeClass(CLASSE_REVELADO);
-		document
-			.querySelectorAll<HTMLElement>(`.${CLASSE_BOTAO}`)
-			.forEach((botao) => botao.remove());
-		document
-			.querySelectorAll<HTMLElement>(`[${MARCA}]`)
-			.forEach((container) => container.removeAttribute(MARCA));
+		this.removerIcones();
 	}
 
-	/** Há alguma propriedade cadastrada para esconder? */
-	private temOcultas(dados: DadosPropriedades): boolean {
-		return dados.ocultas.some((c) => normalizarChave(c).length > 0);
+	/**
+	 * O olhinho só faz sentido com a funcionalidade ligada E com algo cadastrado para esconder —
+	 * senão seria um botão morto na barra de toda nota.
+	 */
+	private deveAparecer(): boolean {
+		const dados = this.getDados();
+		return dados.ativo && dados.ocultas.some((c) => normalizarChave(c).length > 0);
 	}
 
-	private removerDe(container: HTMLElement): void {
-		if (!container.hasAttribute(MARCA)) return;
-		container.removeAttribute(MARCA);
-		container.querySelectorAll<HTMLElement>(`.${CLASSE_BOTAO}`).forEach((b) => b.remove());
-	}
+	private darIconeA(view: MarkdownView): void {
+		// `addAction` não é idempotente: chamá-la de novo empilharia um segundo ícone. A marca vive
+		// no container da view, que o Obsidian descarta junto com a aba.
+		const dono = view.containerEl;
+		if (dono.dataset[MARCA]) return;
 
-	private inserirEm(container: HTMLElement): void {
-		if (container.hasAttribute(MARCA)) return;
-
-		// O cabeçalho "Propriedades" é o lugar natural, mas o tema Minimal o esconde
-		// (`.metadata-heading-off`). Nesse caso o botão vai no próprio container, e o CSS o
-		// posiciona no canto — senão o olhinho ficaria invisível junto com o cabeçalho.
-		const cabecalho = container.querySelector<HTMLElement>(".metadata-properties-heading");
-		const destino = cabecalho ?? container;
-
-		const botao = destino.createEl("button", { cls: `clickable-icon ${CLASSE_BOTAO}` });
-		botao.type = "button";
-		if (!cabecalho) botao.addClass("customize-props-olho-solto");
-
-		this.pintar(botao);
-
-		botao.addEventListener("click", (evento) => {
-			// O cabeçalho do bloco de propriedades é clicável no Obsidian (recolhe a seção).
-			// Sem isto, revelar as propriedades fecharia o bloco no mesmo clique.
+		const icone = view.addAction("eye-off", "Mostrar as propriedades ocultas", (evento) => {
 			evento.preventDefault();
-			evento.stopPropagation();
 			void this.alternar();
 		});
+		icone.addClass(CLASSE_BOTAO);
 
-		container.setAttribute(MARCA, "1");
+		dono.dataset[MARCA] = "1";
+		this.icones.add(icone);
 	}
 
 	private async alternar(): Promise<void> {
-		const dados = this.getDados();
-		const novo = !dados.revelado;
-		await this.aoAlternar(novo);
+		await this.aoAlternar(!this.getDados().revelado);
 		this.sincronizarBody();
-		// Repinta os olhinhos de todas as notas abertas — em split, os dois precisam concordar.
-		document.querySelectorAll<HTMLElement>(`.${CLASSE_BOTAO}`).forEach((b) => this.pintar(b));
+		this.pintarTodos();
 	}
 
-	/** Ícone e rótulo refletem o estado atual: olho aberto = as escondidas estão à mostra. */
-	private pintar(botao: HTMLElement): void {
+	/** Ícone e rótulo refletem o estado: olho aberto = as escondidas estão à mostra. */
+	private pintarTodos(): void {
 		const revelado = this.getDados().revelado;
-		setIcon(botao, revelado ? "eye" : "eye-off");
-		botao.setAttribute(
-			"aria-label",
-			revelado ? "Esconder as propriedades ocultas" : "Mostrar as propriedades ocultas",
-		);
-		botao.toggleClass("is-ativo", revelado);
+		this.icones.forEach((icone) => {
+			setIcon(icone, revelado ? "eye" : "eye-off");
+			icone.setAttribute(
+				"aria-label",
+				revelado ? "Esconder as propriedades ocultas" : "Mostrar as propriedades ocultas",
+			);
+			icone.toggleClass("is-ativo", revelado);
+		});
+	}
+
+	/** Esquece os ícones de abas já fechadas — senão o Set cresce sem parar durante a sessão. */
+	private limparOrfaos(): void {
+		this.icones.forEach((icone) => {
+			if (!icone.isConnected) this.icones.delete(icone);
+		});
+	}
+
+	private removerIcones(): void {
+		this.icones.forEach((icone) => icone.remove());
+		this.icones.clear();
+		// Sem limpar a marca, religar a funcionalidade não devolveria o ícone às abas já abertas.
+		this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+			delete leaf.view.containerEl.dataset[MARCA];
+		});
 	}
 }

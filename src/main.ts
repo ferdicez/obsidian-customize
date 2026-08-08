@@ -121,7 +121,10 @@ export default class CustomizePlugin extends Plugin {
 	 *
 	 * Quem esconde é CSS (ver `propriedades.ts`); daqui sai só o `<style>` e o olhinho. Por isso
 	 * não há observador de DOM: a varredura acontece nos eventos de workspace, que disparam nas
-	 * trocas de nota e ficam quietos enquanto ela digita no frontmatter.
+	 * transições que importam e ficam quietos enquanto ela digita no frontmatter.
+	 *
+	 * O olhinho vive na barra de ações da aba, via `view.addAction()` — os eventos abaixo existem
+	 * para dar o ícone a abas abertas depois do boot (`layout-change` cobre split e aba nova).
 	 */
 	private iniciarPropriedades(): void {
 		this.estilosPropriedades = new EstilosDinamicos(this, "propriedades");

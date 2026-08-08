@@ -1,7 +1,7 @@
 {
 	"id": "customize",
 	"name": "Customize",
-	"version": "0.6.0",
+	"version": "0.6.1",
 	"minAppVersion": "1.4.10",
 	"description": "Paleta de cores com atalho para copiar o hex, personalização de callouts (nome livre, cor, ícone e aparência), as views das Bases como abas com ícones e as propriedades da nota em duas colunas, com as menos úteis escondidas atrás de um olhinho.",
 	"author": "ferdicez",

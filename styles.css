@@ -708,44 +708,20 @@ forma global: ao desativar o plugin, nada deve sobrar visualmente.
 /* ─────────────────────────────────────────────────────────────────────────────────────────────
    PROPRIEDADES DA NOTA
 
-   Duas zonas bem diferentes, na ordem: primeiro o olhinho, que vive no bloco de propriedades de
-   TODA nota (fora do painel, logo sem o escopo `.customize-config`); depois os controles do
-   painel, escopados como manda a regra 1 de `_docs/painel-de-configuracoes.md`.
+   Duas zonas bem diferentes, na ordem: primeiro o olhinho, que vive na barra de ações da aba
+   (fora do painel, logo sem o escopo `.customize-config`); depois os controles do painel,
+   escopados como manda a regra 1 de `_docs/painel-de-configuracoes.md`.
 
    O que esconde as propriedades e monta as colunas NÃO está aqui — é gerado em runtime por
    `propriedades.ts`, porque depende do que ela cadastrou. Aqui fica só o que é fixo.
    ───────────────────────────────────────────────────────────────────────────────────────────── */
 
-/* O olhinho no cabeçalho "Propriedades". Discreto por padrão: ele fica visível em cima de toda
-   nota do vault, e um botão de destaque ali competiria com o conteúdo dela. */
-.customize-props-olho {
-	color: var(--text-faint);
-	flex-shrink: 0;
-}
-
-.customize-props-olho:hover {
-	color: var(--text-normal);
-}
-
-/* Revelado: o olho fica na cor de destaque. É o sinal de que a nota está mostrando MAIS do que
-   o normal — sem isso, ela veria as propriedades todas e não saberia que basta clicar para
-   voltar ao estado enxuto. */
-.customize-props-olho.is-ativo {
+/* O olhinho fica na barra de ações da aba, ao lado do livro (modo de leitura) — escolha dela.
+   Quase não há CSS aqui de propósito: `view.addAction()` entrega o ícone já posicionado e
+   estilizado como os nativos, e é isso que faz ele parecer parte do Obsidian em qualquer tema.
+   Só o estado "revelado" é nosso, porque o Obsidian não tem como saber dele. */
+.view-action.customize-props-olho.is-ativo {
 	color: var(--text-accent);
-}
-
-/* Quando o tema esconde o cabeçalho "Propriedades" (o Minimal faz isso via `.metadata-heading-off`),
-   o botão é filho direto do container e precisa se posicionar sozinho no canto superior direito —
-   senão ele entraria no fluxo, empurrando a primeira propriedade para baixo. */
-.metadata-container:has(.customize-props-olho-solto) {
-	position: relative;
-}
-
-.customize-props-olho-solto {
-	position: absolute;
-	top: 0;
-	right: 0;
-	z-index: 1;
 }
 
 /* ── Painel: a lista de propriedades ocultas ─────────────────────────────────────────────── */

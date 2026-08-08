@@ -80,8 +80,8 @@ export class SecaoPropriedades {
 		containerEl.createEl("p", {
 			cls: "customize-config-nota",
 			text:
-				"Estas não aparecem no topo da nota. O olhinho no bloco de propriedades mostra todas " +
-				"quando você precisar — e continua mostrando até você clicar de novo.",
+				"Estas não aparecem no topo da nota. O olhinho na barra da aba (ao lado do ícone de " +
+				"leitura) mostra todas quando você precisar — e continua mostrando até você clicar de novo.",
 		});
 
 		this.listaOcultas(containerEl);
