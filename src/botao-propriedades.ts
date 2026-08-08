@@ -18,11 +18,11 @@ import { CLASSE_REVELADO, normalizarChave, type DadosPropriedades } from "./prop
  *
  * `view.addAction()` é a via oficial: o Obsidian posiciona, estiliza e **remove o ícone junto com a
  * view**. A versão anterior deste arquivo inseria `<button>` à mão no `.metadata-properties-heading`
- * e por isso precisava de marca anti-duplicata, remoção manual e reposicionamento quando o tema
- * escondia o cabeçalho. Nada disso existe mais.
+ * e por isso precisava de remoção manual e reposicionamento quando o tema escondia o cabeçalho.
  *
- * O que sobra para nós é só: dar o ícone a cada view que ainda não tem, e manter todos os ícones
- * (várias notas abertas em split) desenhando o mesmo estado.
+ * O que sobra para nós é só: dar o ícone a cada view que ainda não tem (**sem duplicar** — ver a
+ * ARMADILHA em `darIconeA`), e manter todos os ícones (várias notas abertas em split) desenhando
+ * o mesmo estado.
  *
  * ## O estado é do body, não do botão
  *
@@ -30,8 +30,10 @@ import { CLASSE_REVELADO, normalizarChave, type DadosPropriedades } from "./prop
  * classe e persiste a escolha — então dois splits concordam de graça, sem estado espalhado.
  */
 
-/** Marca a view que já ganhou o ícone, para não empilhar um por re-render. */
-const MARCA = "customize-olho";
+/**
+ * A classe do nosso ícone. É também o que impede a duplicata: `darIconeA` pergunta à barra de
+ * ações se já existe um elemento com ela (ver a ARMADILHA lá embaixo).
+ */
 const CLASSE_BOTAO = "customize-props-olho";
 
 export class BotaoPropriedades {
@@ -90,19 +92,43 @@ export class BotaoPropriedades {
 		return dados.ativo && dados.ocultas.some((c) => normalizarChave(c).length > 0);
 	}
 
+	/**
+	 * Dá o ícone a uma view, no máximo um.
+	 *
+	 * ## ARMADILHA — a verdade é o DOM, não uma marca nossa
+	 *
+	 * `addAction` não é idempotente: chamada duas vezes, empilha dois ícones. A primeira versão
+	 * disto marcava `view.containerEl.dataset` e pulava se a marca existisse — **e duplicou mesmo
+	 * assim** (relato dela: "ele está com esses dois rolinhos agora"). O motivo é que o Obsidian
+	 * **recria o `containerEl`** ao alternar entre edição e leitura: a marca vai embora junto, a
+	 * varredura seguinte acha que a view nunca teve ícone, e adiciona outro. O mesmo vale para
+	 * qualquer estado que a gente guarde fora do DOM que o Obsidian controla.
+	 *
+	 * A correção é perguntar à própria barra de ações quantos ícones nossos ela já tem. É o que o
+	 * Note Toolbar faz (`querySelector(".view-actions")`), e é robusto porque a resposta vem de
+	 * onde o ícone de fato está — se o Obsidian recriou a barra, ela está vazia e a pergunta se
+	 * responde sozinha.
+	 */
 	private darIconeA(view: MarkdownView): void {
-		// `addAction` não é idempotente: chamá-la de novo empilharia um segundo ícone. A marca vive
-		// no container da view, que o Obsidian descarta junto com a aba.
-		const dono = view.containerEl;
-		if (dono.dataset[MARCA]) return;
+		const barra = view.containerEl.querySelector(".view-actions");
+		if (!barra) return;
+
+		const existentes = barra.querySelectorAll<HTMLElement>(`.${CLASSE_BOTAO}`);
+		if (existentes.length > 0) {
+			// Já tem. Se por qualquer motivo houver mais de um (duplicata vinda de uma versão
+			// anterior nesta mesma sessão), fica só o primeiro.
+			existentes.forEach((el, i) => {
+				if (i === 0) this.icones.add(el);
+				else el.remove();
+			});
+			return;
+		}
 
 		const icone = view.addAction("eye-off", "Mostrar as propriedades ocultas", (evento) => {
 			evento.preventDefault();
 			void this.alternar();
 		});
 		icone.addClass(CLASSE_BOTAO);
-
-		dono.dataset[MARCA] = "1";
 		this.icones.add(icone);
 	}
 
@@ -132,12 +158,15 @@ export class BotaoPropriedades {
 		});
 	}
 
+	/**
+	 * Tira todos os ícones. Varre o DOM em vez de confiar só no Set: um ícone que tenha escapado
+	 * do nosso registro (recriação de view, duplicata de uma versão anterior na mesma sessão)
+	 * ficaria órfão na barra para sempre, e desligar a funcionalidade não pode deixar rastro.
+	 */
 	private removerIcones(): void {
-		this.icones.forEach((icone) => icone.remove());
+		document
+			.querySelectorAll<HTMLElement>(`.${CLASSE_BOTAO}`)
+			.forEach((icone) => icone.remove());
 		this.icones.clear();
-		// Sem limpar a marca, religar a funcionalidade não devolveria o ícone às abas já abertas.
-		this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
-			delete leaf.view.containerEl.dataset[MARCA];
-		});
 	}
 }
